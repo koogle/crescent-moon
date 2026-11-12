@@ -1,22 +1,103 @@
 """Evaluation tasks in one layout: an image and the phrases to detect in it.
 
-A sample is {"dataset", "image_id", "image_url", "width", "height", "queries"}.
-A query is {"phrase", "kind", "boxes", "exhaustive", "group"}:
+A sample is {"image_id", "image", "width", "height", "queries"}. "image" is a URL or
+a path relative to the image folder. A query is {"phrase", "kind", "boxes",
+"exhaustive", "group"}:
 
 - kind "present": every instance of a category that is in the image.
+- kind "referring": an expression that picks out one object.
 - kind "absent": a category verified not to be in the image; any box is a false alarm.
-- kind "referring": an expression that picks out exactly one object.
 
 `exhaustive` is False when the dataset does not promise that every instance of the
 category is annotated, so unmatched predictions for that query are not errors.
 """
 
-import json
 import random
-import re
 from collections import defaultdict
 
-COCO_IMAGES = "http://images.cocodataset.org"
+# COCO's 80 detection categories, in the class-index order of detection-datasets/coco.
+COCO_NAMES = [
+    "person",
+    "bicycle",
+    "car",
+    "motorcycle",
+    "airplane",
+    "bus",
+    "train",
+    "truck",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "tie",
+    "suitcase",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "chair",
+    "couch",
+    "potted plant",
+    "bed",
+    "dining table",
+    "toilet",
+    "tv",
+    "laptop",
+    "mouse",
+    "remote",
+    "keyboard",
+    "cell phone",
+    "microwave",
+    "oven",
+    "toaster",
+    "sink",
+    "refrigerator",
+    "book",
+    "clock",
+    "vase",
+    "scissors",
+    "teddy bear",
+    "hair drier",
+    "toothbrush",
+]
 
 
 def lvis_phrase(name):
@@ -25,11 +106,11 @@ def lvis_phrase(name):
 
 
 def lvis_samples(annotations, images, max_absent, seed):
-    """Prompt each image with its annotated categories and verified-absent ones.
+    """Prompt each image with its annotated categories.
 
     LVIS is federated: an image lists the categories checked and found absent
     (`neg_category_ids`) and those present but not fully annotated
-    (`not_exhaustive_category_ids`).
+    (`not_exhaustive_category_ids`). `max_absent` adds that many absent categories.
     """
     rng = random.Random(seed)
     categories = {c["id"]: c for c in annotations["categories"]}
@@ -65,9 +146,8 @@ def lvis_samples(annotations, images, max_absent, seed):
             )
         samples.append(
             {
-                "dataset": "lvis",
                 "image_id": image["id"],
-                "image_url": image["coco_url"],
+                "image": image["coco_url"],
                 "width": image["width"],
                 "height": image["height"],
                 "queries": queries,
@@ -76,40 +156,70 @@ def lvis_samples(annotations, images, max_absent, seed):
     return samples
 
 
-def refcoco_samples(rows, refs, seed):
-    """One seeded expression per referred object, grouped by image.
+def coco_samples(rows, images, seed, names=COCO_NAMES):
+    """Prompt each COCO image with the categories annotated in it.
 
-    `rows` follow the jxu124/refcoco* layout: one row per referred object with its
-    expressions, the COCO annotation and image record as JSON strings.
+    `rows` follow detection-datasets/coco: `objects` holds parallel `category`
+    indices into `names` and `bbox` as [x0, y0, x1, y1].
     """
     rng = random.Random(seed)
-    rows = sorted(rows, key=lambda row: row["ref_id"])
-    by_image = defaultdict(list)
-    for row in rng.sample(rows, min(refs, len(rows))):
-        by_image[row["image_id"]].append(row)
+    rows = [row for row in sorted(rows, key=lambda row: row["image_id"]) if row["objects"]["bbox"]]
     samples = []
-    for image_id, group in sorted(by_image.items()):
-        info = json.loads(group[0]["raw_image_info"])
-        queries = []
-        for row in group:
-            x, y, w, h = json.loads(row["raw_anns"])["bbox"]
-            queries.append(
-                {
-                    "phrase": rng.choice(row["sentences"])["raw"].strip(),
-                    "kind": "referring",
-                    "boxes": [[x, y, x + w, y + h]],
-                    "exhaustive": True,
-                    "group": "",
-                }
-            )
-        folder = re.fullmatch(r"COCO_(\w+2014)_\d+\.jpg", info["file_name"]).group(1)
+    for row in rng.sample(rows, min(images, len(rows))):
+        by_category = defaultdict(list)
+        for category, box in zip(row["objects"]["category"], row["objects"]["bbox"], strict=True):
+            by_category[category].append(list(box))
         samples.append(
             {
-                "dataset": "refcoco",
-                "image_id": image_id,
-                "image_url": f"{COCO_IMAGES}/{folder}/{info['file_name']}",
-                "width": info["width"],
-                "height": info["height"],
+                "image_id": row["image_id"],
+                "image": f"coco/{row['image_id']}.jpg",
+                "width": row["width"],
+                "height": row["height"],
+                "queries": [
+                    {
+                        "phrase": names[category],
+                        "kind": "present",
+                        "boxes": boxes,
+                        "exhaustive": True,
+                        "group": "",
+                    }
+                    for category, boxes in sorted(by_category.items())
+                ],
+            }
+        )
+    return samples
+
+
+def refcoco_m_samples(rows, images, seed):
+    """Every expression of every referred object in the sampled images.
+
+    `rows` follow moondream/refcoco-m: one row per image, `samples` holding each
+    referred object's `sentences`, `bbox` as [x, y, width, height] and `mask` size.
+    """
+    rng = random.Random(seed)
+    rows = sorted(rows, key=lambda row: row["image_id"])
+    samples = []
+    for row in rng.sample(rows, min(images, len(rows))):
+        height, width = row["samples"][0]["mask"]["size"]
+        queries = []
+        for referred in row["samples"]:
+            x, y, w, h = referred["bbox"]
+            for sentence in referred["sentences"]:
+                queries.append(
+                    {
+                        "phrase": sentence.strip(),
+                        "kind": "referring",
+                        "boxes": [[x, y, x + w, y + h]],
+                        "exhaustive": True,
+                        "group": "",
+                    }
+                )
+        samples.append(
+            {
+                "image_id": row["image_id"],
+                "image": f"refcoco-m/{row['image_id']}.jpg",
+                "width": width,
+                "height": height,
                 "queries": queries,
             }
         )
