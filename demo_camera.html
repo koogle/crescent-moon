@@ -33,9 +33,8 @@
     <input id="categories" type="text" value="">
   </label>
   <label>Camera <select id="camera"><option value="">Default camera</option></select></label>
-  <label id="modelField">Model <select id="model"></select></label>
-  <label class="inline" id="trackField"><input id="track" type="checkbox" checked>&nbsp;Track across frames</label>
-  <label class="inline" id="deviceSwitch" hidden><input id="device" type="checkbox">&nbsp;<span id="deviceText">Run on this device (WebGPU)</span></label>
+  <label>Model <select id="model"></select></label>
+  <label class="inline"><input id="track" type="checkbox" checked>&nbsp;Track across frames</label>
   <button id="toggle">Start camera</button>
 </div>
 <div class="controls" id="deviceStep" hidden>
@@ -70,43 +69,30 @@ const grabCrop = document.createElement("canvas");
 let config = null, running = false, stream = null, boxes = [], scale = 1, session = null;
 // The detector in this browser, once loaded: { model, patches, side, candidates, select }.
 let local = null, loadingLocal = null;
-// `camera?device=1` is the page of the demo's "On device" tab: only the browser's detector.
-const onDevice = new URLSearchParams(location.search).get("device") === "1";
+// The Model list's entry for the detector in this browser, and whether it is chosen.
+const DEVICE = "device";
+const onDevice = () => $("model").value === DEVICE;
 const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
 
 fetch("camera/config").then((r) => r.json()).then((c) => {
   config = c;
   for (const name of c.models) $("model").add(new Option(name, name, false, name === c.default));
-  // Offered when the server has an export for the browser; needs WebGPU in the browser.
-  if (!c.device) {
-    if (onDevice) status.textContent = "This deployment has no export for the browser.";
-    return;
-  }
-  $("deviceSwitch").hidden = onDevice;
+  // The browser's own detector is one more model, offered when the server has an export
+  // for it; it needs WebGPU.
+  if (!c.device) return;
+  const entry = new Option("On this device: slots, rank 64, 4-bit (WebGPU)", DEVICE);
   if (!navigator.gpu) {
-    $("device").disabled = true;
-    $("deviceText").textContent = "Run on this device: this browser has no WebGPU";
-    if (onDevice) {
-      toggle.disabled = true;
-      status.textContent = "This browser has no WebGPU, which the on-device detector needs "
-        + "(Safari 26, Chrome or Edge 113 and later; in Firefox it depends on the platform).";
-    }
-    return;
+    entry.disabled = true;
+    entry.text = "On this device: this browser has no WebGPU";
   }
-  if (onDevice) {
-    $("device").checked = true;
-    $("modelField").hidden = true; $("trackField").hidden = true;
-    status.textContent = `Runs the 4-bit detector (${c.device.export}) in this browser on WebGPU: `
-      + "first download the detector, then start the camera.";
-    showDeviceStep();
-  }
+  $("model").add(entry);
 });
 
 // The download is its own step: the button fetches the weights (the browser keeps them),
 // and the camera starts on this device only once the detector is loaded.
 async function showDeviceStep() {
-  const on = $("device").checked;
-  $("deviceStep").hidden = !on;
+  const on = onDevice();
+  $("deviceStep").hidden = !on; $("track").disabled = on;
   toggle.disabled = on && !local;
   if (!on || local || loadingLocal) return;
   const kept = "caches" in window && (await (await caches.open("crescent-moon-weights")).keys()).length > 0;
@@ -115,11 +101,9 @@ async function showDeviceStep() {
 }
 $("download").addEventListener("click", loadLocal);
 
-$("device").addEventListener("change", () => {
-  const on = $("device").checked;
-  $("model").disabled = on; $("track").disabled = on;
+$("model").addEventListener("change", () => {
   boxes = [];
-  if (on && running && !local) stop("Stopped; download the detector, then start the camera.");
+  if (onDevice() && running && !local) stop("Stopped; download the detector, then start the camera.");
   showDeviceStep();
 });
 
@@ -137,9 +121,8 @@ function loadLocal() {
     $("downloadText").textContent = "Preparing the detector on the GPU";
     model.device.lost.then((info) => {
       local = null; loadingLocal = null; $("download").disabled = false; $("progress").hidden = true; $("downloadText").textContent = "";
-      if (onDevice) { stop(`The browser's GPU device was lost (${info.message || info.reason}).`); showDeviceStep(); return; }
-      $("device").checked = false; $("model").disabled = false; $("track").disabled = false;
-      showDeviceStep();
+      if (!onDevice()) return;
+      $("model").value = config.default; showDeviceStep();
       status.textContent = `The browser's GPU device was lost (${info.message || info.reason}); back on the server.`;
     });
     local = { model, patches: runtime.patches, side: runtime.CROP, ...selection };
@@ -148,9 +131,7 @@ function loadLocal() {
     status.textContent = "The detector is loaded on this device; start the camera.";
   })().catch((error) => {
     loadingLocal = null; $("download").disabled = false; $("progress").hidden = true; $("downloadText").textContent = "";
-    if (onDevice) { stop(`Could not run on this device: ${error.message}`); showDeviceStep(); return; }
-    $("device").checked = false; $("model").disabled = false; $("track").disabled = false;
-    showDeviceStep();
+    $("model").value = config.default; showDeviceStep();
     status.textContent = `Could not run on this device: ${error.message}`;
   });
   return loadingLocal;
@@ -254,7 +235,7 @@ async function detectLoop() {
     }
     const w = video.videoWidth, h = video.videoHeight;
     if (!w) { await new Promise((r) => setTimeout(r, 100)); continue; }
-    if ($("device").checked) {
+    if (onDevice()) {
       if (!local) { stop("Download the detector, then start the camera."); return; }
       await detectLocal(w, h);
       // Let the page paint and take input between frames.
@@ -306,7 +287,7 @@ async function start() {
   await listCameras();
   running = true; boxes = []; session = crypto.randomUUID();
   toggle.textContent = "Stop"; toggle.classList.add("stop");
-  if (!$("device").checked) {
+  if (!onDevice()) {
     status.textContent = "Starting the GPU: the first boxes can take about a minute; the camera keeps playing.";
   }
   requestAnimationFrame(draw);

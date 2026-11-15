@@ -729,6 +729,9 @@ SELECTION_SERIES = [
     ("COCO 23k, Carbon", "slots-coco23k-carbon-rank64"),
     ("COCO 23k, human + Carbon", "slots-coco23k-merged-rank64"),
     ("+ tile crops in training", "slots-tilecrops-teacher-coco-rank64"),
+    ("r64 on 4-bit weights, trained on full precision", "slots-teacher-coco-rank64-w4"),
+    ("r64 on 4-bit weights, trained on them", "slots-teacher-coco-rank64-w4-head"),
+    ("same, one crop", "slots-teacher-coco-rank64-w4-crops1"),
 ]
 SELECTION_MODES = (("fast", None), ("tiled", 4))
 
@@ -786,7 +789,9 @@ def selection_area_figure(artifacts, out):
             axis.bar_label(bars, labels=[f"{v:.3f}" for v in values], fontsize=7, padding=2)
         best = max(m[mode][test][key] for _, m in rows for mode, _ in SELECTION_MODES)
         axis.set_ylim(0, best * 1.15)
-        axis.set_xticks(places, [label for label, _ in rows], fontsize=8, color=MUTED)
+        axis.set_xticks(
+            places, [textwrap.fill(label, 13) for label, _ in rows], fontsize=8, color=MUTED
+        )
         axis.legend(frameon=False, fontsize=8, labelcolor=INK, loc="upper right", ncols=2)
     axes[-1].annotate(
         "Moondream gives no confidence scores, so it has no curve or area.",
@@ -850,7 +855,9 @@ def selection_f1_figure(artifacts, out):
             )
         values = [m[mode][test]["iou_0.5"]["f1"] for _, m in rows for mode, _ in SELECTION_MODES]
         axis.set_ylim(min(values) - 0.03, max(values) + 0.025)
-        axis.set_xticks(places, [label for label, _ in rows], fontsize=8, color=MUTED)
+        axis.set_xticks(
+            places, [textwrap.fill(label, 13) for label, _ in rows], fontsize=8, color=MUTED
+        )
         axis.legend(
             frameon=False,
             fontsize=8,
@@ -871,6 +878,8 @@ CURVE_SERIES = [
     ("COCO + Carbon, rank 64", "slots-teacher-coco-rank64", 1),
     ("COCO + Carbon, rank 128", "slots-teacher-coco-rank128", 2),
     ("+ tile crops, rank 64", "slots-tilecrops-teacher-coco-rank64", 8),
+    ("Rank 64 on 4-bit weights, trained on full precision", "slots-teacher-coco-rank64-w4", 4),
+    ("Rank 64 on 4-bit weights, trained on them", "slots-teacher-coco-rank64-w4-head", 6),
 ]
 CURVE_COLOURS = {
     1: BLUE,
