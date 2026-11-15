@@ -10,10 +10,10 @@ hand-written WGSL kernels for exactly that pass are the point of the work.
 
 | Milestone | State |
 |---|---|
-| 0. Model choice for the device | One crop measured for the current head ([README](../README.md), "Crops for the current head"). Heads trained on the 4-bit backbone: STATUS_M0 |
+| 0. Model choice for the device | One crop measured for the current head ([README](../README.md), "Crops for the current head"). Two heads are training on the 4-bit backbone (`slots-teacher-coco-rank64-w4`, `-w4-crops1`); no result yet |
 | 1. Export and reference | Implemented: `scripts/export_web.py`; the shards unpack to the model's weights bit for bit |
 | 2. Kernels with unit tests | Implemented: `web/kernels.js`, 14 cases in `web/tests/kernels.test.js` pass in headless Chromium |
-| 3. Full forward pass | Implemented: `web/model.js`, `web/select.js`. STATUS_M3 |
+| 3. Full forward pass | Implemented: `web/model.js`, `web/select.js`. The first decoder block matches PyTorch (below); the whole pass has not yet been compared |
 | 4. On the device | The camera page's "Run on this device" switch is implemented and loads the model in headless Chromium; not yet run on a phone or a desktop GPU |
 | 5. Speed | Not started; no speed has been measured on a real GPU |
 
@@ -61,12 +61,17 @@ node web/tests/run.cjs kernels
 node web/tests/run.cjs reference --export artifacts/web/NAME --timeout 300
 ```
 
-VERIFICATION
+`kernels` checks each kernel against plain JavaScript arithmetic. `block` runs the first
+decoder block from the reference's projected embeddings: the prefix hidden state matches
+PyTorch's to 3.2e-7 of its largest value on image `000000037777`. `reference` runs the
+whole pass and compares every stored activation, every slot's outputs and the boxes; on
+SwiftShader it takes about 33 minutes per image, and its result is not in yet. `steps`
+prints each buffer's statistics after every step, for locating a divergence.
 
 ## Not done yet
 
 - The 500-image COCO comparison of milestone 3 (browser F1 within 0.005 of PyTorch at the
-  same rounding): one image takes about RUNTIME on SwiftShader, so it needs a real GPU.
+  same rounding): one image takes about 33 minutes on SwiftShader, so it needs a real GPU.
 - Timings on the iPhone 17 Pro and a desktop browser, and whether Safari's memory limit
   admits the 1.2 GB export (plus about 0.25 GB of activations and decoded parameters).
 - Timestamp queries: stage times on the page are wall-clock, with the GPU queue drained
