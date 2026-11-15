@@ -327,3 +327,11 @@ def test_tile_records_clip_objects_and_filter_at_tile_scale():
     crop, kept = tiles["7#tile1"]
     assert [n for n, _ in kept] == ["dog"] and kept[0][1][2] == 0.4  # clipped to 20 px of 50
     assert "7#tile2" not in tiles  # no objects there
+
+
+def test_feature_variant_names_the_backbone_configuration():
+    from crescent_moon.train_slots import feature_variant
+
+    assert feature_variant({}) == ""
+    assert feature_variant({"weight_bits": 4}) == "-w4"
+    assert feature_variant({"weight_bits": 4, "max_crops": 1}) == "-w4-crops1"

@@ -18,7 +18,7 @@ auxiliary masked-diffusion denoising loss, category prompts, size-weighted losse
 teacher-only labels do not help; we report what did and did not work.
 
 - **Demo** (Gradio on Modal: image comparison, streamed video, live camera):
-  <https://radiantai--crescent-moon-demo-web.modal.run>. The app stops itself within 24
+  <https://radiantai--crescent-moon-demo-web.us-east.modal.run>. The app stops itself within 24
   hours of each deploy; `.venv/bin/python demo_app.py` brings it back ([Demo](#demo)).
 - **Paper**: [`paper/main.tex`](paper/main.tex), two pages; editable copy as a
   [Claude Doc](https://claude.ai/artifact/SWvyTurEodiG2uWnKKQaWc).

@@ -217,6 +217,7 @@ def train_slots(run_id, config, provenance, deadline):
         coco_items,
         coco_tile_items,
         encode,
+        feature_variant,
         teacher_items,
         train,
     )
@@ -228,7 +229,8 @@ def train_slots(run_id, config, provenance, deadline):
         raise ValueError(f"Run {run_id} already has results")
     stems = []
     for source in config["data"]:
-        folder = Path("/runs/slots") / f"features-{config['min_area']}-{config['max_objects']}"
+        name = f"features-{config['min_area']}-{config['max_objects']}{feature_variant(config)}"
+        folder = Path("/runs/slots") / name
         if source["kind"] == "coco":
             for name in source["files"]:
                 stem = folder / Path(name).stem

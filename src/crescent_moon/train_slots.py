@@ -76,6 +76,28 @@ def load_backbone(repo, revision, device):
     return model, inner, functions
 
 
+def configure_backbone(inner, weight_bits=None, max_crops=None, weight_group=32):
+    """Change a loaded backbone in place to the configuration a head runs on:
+    `weight_bits` rounds every Linear weight to that many bits per group of
+    `weight_group` (`quantize.round_weights_`), `max_crops` limits the vision encoder's
+    high-resolution crops."""
+    if weight_bits is not None:
+        from crescent_moon.quantize import round_weights_
+
+        layers, weights = round_weights_(inner, weight_bits, weight_group)
+        print(f"Rounded {layers} Linear layers ({weights:,} weights) to {weight_bits} bits")
+    if max_crops is not None:
+        vision = replace(inner.config.vision, max_crops=max_crops)
+        inner.config = replace(inner.config, vision=vision)
+
+
+def feature_variant(config):
+    """Name suffix of the image features a training config reads: features depend on the
+    backbone's weight rounding and crop limit."""
+    bits, crops = config.get("weight_bits"), config.get("max_crops")
+    return (f"-w{bits}" if bits else "") + (f"-crops{crops}" if crops else "")
+
+
 def kept_objects(objects, width, height, min_area, names=COCO_NAMES):
     """Objects covering at least `min_area` of the image, as (name, [cx, cy, w, h] in 0..1)."""
     kept = []
@@ -97,6 +119,7 @@ def encode(items, out, config, device="cuda"):
 
     items = list(items)
     _, inner, _ = load_backbone(**config["model"], device=device)
+    configure_backbone(inner, config.get("weight_bits"), config.get("max_crops"))
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     features = np.lib.format.open_memmap(
@@ -417,12 +440,16 @@ def save_head(path, head, config, data, heldout_row):
 
 
 def train(config, features, out, device="cuda", saved=lambda: None, deadline=None):
-    """Train the slot head; `features` lists encoded shard stems. Returns the report."""
+    """Train the slot head; `features` lists encoded shard stems. Returns the report.
+
+    With `weight_bits` in the config the head trains on the backbone rounded to that many
+    bits, so its adapters see the weights a low-bit runtime holds."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(config["seed"])
     generator = torch.Generator(device=device).manual_seed(config["seed"])
     _, inner, functions = load_backbone(**config["model"], device=device)
+    configure_backbone(inner, config.get("weight_bits"))
     tokens = inner.config.tokenizer
     data = Features(features, inner.tokenizer, config["label_tokens"], tokens.eos_id)
     order = torch.randperm(
@@ -636,16 +663,12 @@ class SlotDetector:
         self.model, self.inner, self.functions = backbone or load_backbone(
             **config["model"], device=device
         )
-        if weight_bits is not None:
-            if backbone is not None:
-                raise ValueError("weight_bits would change a shared backbone")
-            from crescent_moon.quantize import round_weights_
-
-            layers, weights = round_weights_(self.inner, weight_bits, weight_group)
-            print(f"Rounded {layers} Linear layers ({weights:,} weights) to {weight_bits} bits")
-        if max_crops is not None:
-            vision = replace(self.inner.config.vision, max_crops=max_crops)
-            self.inner.config = replace(self.inner.config, vision=vision)
+        # A head trained on a rounded backbone or a crop limit runs on the same by default.
+        weight_bits = config.get("weight_bits") if weight_bits is None else weight_bits
+        max_crops = config.get("max_crops") if max_crops is None else max_crops
+        if weight_bits is not None and backbone is not None:
+            raise ValueError("weight_bits would change a shared backbone")
+        configure_backbone(self.inner, weight_bits, max_crops, weight_group)
         self.head = SlotHead(
             self.inner.text, config["slots"], config["label_tokens"], config["rank"]
         )
