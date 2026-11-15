@@ -292,16 +292,16 @@ class Features:
         return embeddings, targets, ids, truths
 
 
-def image_cache(inner, functions, embeddings, prompt=None):
+def image_cache(inner, functions, embeddings, prompt=None, trace=None):
     """Prefix keys and values for a batch of image embeddings [B, 729, D], followed by
-    the prompt token ids [B, L] when given."""
+    the prompt token ids [B, L] when given. `trace` is passed to `prefix_cache`."""
     bos = functions.text_encoder(
         torch.tensor([[inner.config.tokenizer.bos_id]], device=embeddings.device), inner.text
     )
     parts = [bos.expand(embeddings.size(0), -1, -1), embeddings.to(bos.dtype)]
     if prompt is not None:
         parts.append(functions.text_encoder(prompt, inner.text).to(bos.dtype))
-    return prefix_cache(inner.text, torch.cat(parts, dim=1), functions.apply_rotary_emb)
+    return prefix_cache(inner.text, torch.cat(parts, dim=1), functions.apply_rotary_emb, trace)
 
 
 def prompt_categories(present, count, keep, rng):
@@ -663,11 +663,13 @@ class SlotDetector:
         self.model, self.inner, self.functions = backbone or load_backbone(
             **config["model"], device=device
         )
-        # A head trained on a rounded backbone or a crop limit runs on the same by default.
-        weight_bits = config.get("weight_bits") if weight_bits is None else weight_bits
-        max_crops = config.get("max_crops") if max_crops is None else max_crops
         if weight_bits is not None and backbone is not None:
             raise ValueError("weight_bits would change a shared backbone")
+        if backbone is None:
+            # A head trained on a rounded backbone or a crop limit runs on the same by
+            # default; a shared backbone comes as its owner configured it.
+            weight_bits = config.get("weight_bits") if weight_bits is None else weight_bits
+            max_crops = config.get("max_crops") if max_crops is None else max_crops
         configure_backbone(self.inner, weight_bits, max_crops, weight_group)
         self.head = SlotHead(
             self.inner.text, config["slots"], config["label_tokens"], config["rank"]

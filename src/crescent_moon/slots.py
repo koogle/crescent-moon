@@ -73,13 +73,17 @@ def block_forward(block, x, positions, freqs, rotate, prefix=None, adapter=None)
 
 
 @torch.no_grad()
-def prefix_cache(text, embeddings, rotate):
-    """Keys and values of the image prefix for a batch of [B, PREFIX, D] input embeddings."""
+def prefix_cache(text, embeddings, rotate, trace=None):
+    """Keys and values of the image prefix for a batch of [B, PREFIX, D] input embeddings.
+
+    `trace`, a dict, receives the hidden state after every block under "prefix"."""
     positions = torch.arange(embeddings.size(1), device=embeddings.device)
     x, cache = embeddings, []
     for block in text.blocks:
         x, kv = block_forward(block, x, positions, text.freqs_cis, rotate)
         cache.append(kv)
+        if trace is not None:
+            trace.setdefault("prefix", []).append(x)
     return cache
 
 
@@ -156,7 +160,7 @@ class SlotHead(nn.Module):
         size = region.size_encoder(fourier(boxes[..., 2:4], region.size_features))
         return torch.cat([torch.stack([cx, cy, size], dim=-2), text.wte[tokens]], dim=-2).float()
 
-    def forward(self, text, region, cache, rotate, known=None, hints=None):
+    def forward(self, text, region, cache, rotate, known=None, hints=None, trace=None):
         """Return objectness logits [B, K], box bin logits [B, K, 4, BINS] (x, y, w, h)
         and label logits [B, K, T, vocabulary].
 
@@ -167,6 +171,8 @@ class SlotHead(nn.Module):
         hinted slot's positions also receive the gated embedding of that box and label,
         for example the slot's detection in the previous video frame. Unlike `known`, a
         hint is only an input: every position is still predicted.
+
+        `trace`, a dict, receives the slot positions' final hidden state under "slots".
         """
         batch = cache[0][0].size(0)
         x = (self.mask + self.roles).expand(batch, self.slots, -1, -1)
@@ -185,6 +191,8 @@ class SlotHead(nn.Module):
         for block, kv, adapter in zip(text.blocks, cache, self.adapters, strict=True):
             x, _ = block_forward(block, x, positions, text.freqs_cis, rotate, kv, adapter)
         hidden = x.view(batch, self.slots, self.width, -1)
+        if trace is not None:
+            trace["slots"] = hidden
         # The region decoders read the raw final hidden state, as in Moondream's detector.
         centre = region_mlp(hidden[:, :, 0:2], region.coord_decoder)
         size = region_mlp(hidden[:, :, 2], region.size_decoder).view(batch, self.slots, 2, BINS)

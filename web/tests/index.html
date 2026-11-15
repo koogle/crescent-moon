@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Crescent Moon WebGPU tests</title>
+<pre id="log"></pre>
+<script type="module">
+// ?suite=kernels, or ?suite=reference&export=/artifacts/web/NAME/ (see run.cjs).
+const query = new URLSearchParams(location.search);
+const log = (line) => { document.getElementById("log").textContent += line + "\n"; console.log(line); };
+try {
+  const suite = await import(`./${query.get("suite")}.test.js`);
+  window.results = await suite.run(query, log);
+} catch (error) {
+  log(`ERROR ${error.stack || error}`);
+  window.results = { failed: 1, error: String(error) };
+}
+window.done = true;
+</script>
