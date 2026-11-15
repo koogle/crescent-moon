@@ -13,7 +13,7 @@ hand-written WGSL kernels for exactly that pass are the point of the work.
 | 0. Model choice for the device | One crop measured for the current head ([README](../README.md), "Crops for the current head"). Two heads are training on the 4-bit backbone (`slots-teacher-coco-rank64-w4`, `-w4-crops1`); no result yet |
 | 1. Export and reference | Implemented: `scripts/export_web.py`; the shards unpack to the model's weights bit for bit |
 | 2. Kernels with unit tests | Implemented: `web/kernels.js`, 14 cases in `web/tests/kernels.test.js` pass in headless Chromium |
-| 3. Full forward pass | Implemented: `web/model.js`, `web/select.js`. The first decoder block matches PyTorch (below); the whole pass has not yet been compared |
+| 3. Full forward pass | Implemented: `web/model.js`, `web/select.js`. On one reference image every activation, bin, token and box matches PyTorch (below). The 500-image COCO comparison is not done |
 | 4. On the device | The camera page's "Run on this device" switch is implemented and loads the model in headless Chromium; not yet run on a phone or a desktop GPU |
 | 5. Speed | Not started; no speed has been measured on a real GPU |
 
@@ -65,8 +65,28 @@ node web/tests/run.cjs reference --export artifacts/web/NAME --timeout 300
 decoder block from the reference's projected embeddings: the prefix hidden state matches
 PyTorch's to 3.2e-7 of its largest value on image `000000037777`. `reference` runs the
 whole pass and compares every stored activation, every slot's outputs and the boxes; on
-SwiftShader it takes about 33 minutes per image, and its result is not in yet. `steps`
+SwiftShader it takes about 33 minutes per image. `steps`
 prints each buffer's statistics after every step, for locating a divergence.
+
+Measured with `reference` on image `000000037777`, the 4-bit export of
+`slots-teacher-coco-rank64`, FP32 shaders on SwiftShader. Differences are the largest
+absolute difference as a share of the reference's largest magnitude:
+
+| Compared with PyTorch | Result |
+|---|---|
+| Vision encoder output | 2.0e-5 |
+| Projected image embeddings | 2.6e-5 |
+| Prefix hidden state after decoder blocks 0, 11, 23 | 6.0e-6, 1.6e-6, 9.7e-6 |
+| Slots' final hidden state | 1.3e-4 |
+| Objectness logits | 1.5e-4 |
+| Box bins (48 slots x 4) | 192 of 192 identical |
+| Label tokens (48 slots x 3) | 144 of 144 identical |
+| Bin and token probabilities | 1.1e-4, 6.1e-4 |
+| Selected boxes (label, corners to 0.1 pixel, score to 0.001) | 15 of 15 identical |
+
+Found on the way: `tanh` returned NaN for large arguments on SwiftShader, which broke
+the first MLP of the vision encoder; GELU now clamps the argument to [-10, 10], where
+FP32's tanh is already 1.
 
 ## Not done yet
 

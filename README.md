@@ -890,9 +890,11 @@ volume, where the demo serves it. It holds the head trained on the BF16 backbone
 configuration the low-bit table above measures at F1 0.660; heads trained on the 4-bit
 backbone are in progress.
 
-Implemented and tested here in headless Chromium (WebGPU on the CPU): the kernels
-against plain arithmetic (14 cases), and the first decoder block against PyTorch
-(3.2e-7 of the largest value). Speed on a real GPU and on a phone is unmeasured.
+Tested here in headless Chromium, whose WebGPU runs on the CPU: the kernels against
+plain arithmetic (14 cases), and the whole pass against PyTorch on one image: every
+activation within 1.5e-4 of the largest value, all 192 box bins and 144 label tokens
+identical, and the 15 selected boxes identical. Not measured: speed on a real GPU or a
+phone, and accuracy over a dataset in the browser.
 [`docs/webgpu.md`](docs/webgpu.md) has the design, the status of each milestone and
 what is not done.
 
