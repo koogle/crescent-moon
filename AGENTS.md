@@ -31,7 +31,8 @@ Run commands from the repository root. Environment: `uv sync --extra dev --extra
 - Modal volume `lm-exploration-parallel-detection` (name kept from the project's first
   home): trained heads under `slots/<run id>/`, evaluations, teacher images, HF cache.
   Configs name paths on it as `/runs/...`.
-- HF model repository `jfrick/crescent-moon`: the demo's slot heads.
+- HF model repository `jfrick/crescent-moon` (public): the demo's slot heads and, under
+  `web/`, the browser exports. An export is also on the volume under `web/<name>/`.
 - HF dataset `jfrick/lm-exploration-results`, folder `pr-167/post-training/detection/`:
   every run's outputs, head snapshots, selection studies and figures.
 - Private HF datasets `jfrick/crescent-moon-teacher-labels-gemini-4-carbon` and

@@ -22,15 +22,16 @@ teacher-only labels do not help; we report what did and did not work.
   hours of each deploy; `.venv/bin/python demo_app.py` brings it back ([Demo](#demo)).
 - **Paper**: [`paper/main.tex`](paper/main.tex), two pages; editable copy as a
   [Claude Doc](https://claude.ai/artifact/SWvyTurEodiG2uWnKKQaWc).
-- **Weights**: the three demo heads in the HF model repository
-  [`jfrick/crescent-moon`](https://huggingface.co/jfrick/crescent-moon); every trained
-  head on the Modal volume `lm-exploration-parallel-detection` under `slots/<run id>/`.
+- **Weights**: HF model repository
+  [`jfrick/crescent-moon`](https://huggingface.co/jfrick/crescent-moon): the three demo
+  heads and, under `web/`, the 4-bit export the browser runs. Every trained head is on
+  the Modal volume `lm-exploration-parallel-detection` under `slots/<run id>/`.
 - **Measured outputs** (predictions, summaries, training curves, head snapshots,
   selection studies, figures): HF dataset
   [`jfrick/lm-exploration-results`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-167/post-training/detection),
   folder `pr-167/post-training/detection/<run id>/`.
-- **On-device plan**: [`docs/webgpu.md`](docs/webgpu.md), the slot detector in a phone's
-  browser on hand-written WebGPU kernels.
+- **In the browser**: [`web/`](web/) runs the detector on WebGPU with hand-written WGSL
+  kernels; see [In the browser](#in-the-browser) and [`docs/webgpu.md`](docs/webgpu.md).
 
 **Status:** the evaluation harness, three baselines, custom decode kernels and the
 training runs of the slot head are implemented and measured; the sections below hold
@@ -870,6 +871,30 @@ most of it GPU start-up.
 
 The video gap is the cost model: Moondream answers one category per pass, the slot head
 all categories in one pass.
+
+## In the browser
+
+`web/` runs the slot detector in the page on WebGPU: plain JavaScript and seven WGSL
+kernels written for this pass (4- and 8-bit matrix products with FP16 group scales
+decoded in the shader, FP16 adapter products, layer norm, GELU, rotary embedding,
+attention with an online softmax, argmax with probability), without a runtime library
+or a build step. The camera page's "Run on this device (WebGPU)" switch downloads the
+export once (1.2 GB, kept in the browser's cache), runs each frame through one 378 x 378
+crop and shows the seconds per stage.
+
+`scripts/export_web.py` writes the export: the backbone rounded to 4 bits per group of
+32 and the head's adapters in FP16, in shards with a manifest, plus PyTorch reference
+activations on the stored weights. The current export,
+`slots-teacher-coco-rank64-w4`, is in the HF model repository under `web/` and on the
+volume, where the demo serves it. It holds the head trained on the BF16 backbone, the
+configuration the low-bit table above measures at F1 0.660; heads trained on the 4-bit
+backbone are in progress.
+
+Implemented and tested here in headless Chromium (WebGPU on the CPU): the kernels
+against plain arithmetic (14 cases), and the first decoder block against PyTorch
+(3.2e-7 of the largest value). Speed on a real GPU and on a phone is unmeasured.
+[`docs/webgpu.md`](docs/webgpu.md) has the design, the status of each milestone and
+what is not done.
 
 ## Paper
 
