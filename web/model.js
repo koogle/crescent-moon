@@ -7,7 +7,6 @@ import { Kernels, encode, storage, upload } from "./kernels.js";
 
 const PATCH = 14, GRID = 27, CROP = PATCH * GRID;
 const IMAGE_ROWS = GRID * GRID; // 729 image positions
-const PREFIX = IMAGE_ROWS + 1; // BOS + image
 const VISION = { dim: 1152, hidden: 4304, heads: 16, blocks: 27 };
 const TEXT = { dim: 2048, hidden: 8192, heads: 32, blocks: 24, vocabulary: 51200 };
 const BINS = 1024;
@@ -147,7 +146,10 @@ export class SlotModel {
     this.slots = manifest.head.slots;
     this.width = manifest.selection.coordinates + manifest.head.label_tokens;
     this.slotRows = this.slots * this.width;
-    this.rows = PREFIX + this.slotRows;
+    // The image prefix: BOS, then the image positions, pooled when the head was trained so.
+    this.pool = manifest.head.prefix_pool;
+    this.prefix = 1 + Math.ceil(GRID / this.pool) ** 2;
+    this.rows = this.prefix + this.slotRows;
     this.objectnessBias = tensors["slots.objectness.bias"].value;
     this.kernels = new Kernels(device);
     this.build(tensors);
@@ -156,7 +158,7 @@ export class SlotModel {
   build(t) {
     const k = this.kernels, device = this.device;
     const f32 = (count) => storage(device, count * 4);
-    const V = VISION, T = TEXT, rows = this.rows, slotRows = this.slotRows;
+    const V = VISION, T = TEXT, rows = this.rows, slotRows = this.slotRows, PREFIX = this.prefix;
     const labelTokens = this.manifest.head.label_tokens, coordinates = this.manifest.selection.coordinates;
     const hiddenStride = pad32(V.hidden);
     const b = this.buffers = {
@@ -164,6 +166,7 @@ export class SlotModel {
       vx: f32(IMAGE_ROWS * V.dim), vn: f32(IMAGE_ROWS * V.dim), vqkv: f32(IMAGE_ROWS * 3 * V.dim),
       vmix: f32(IMAGE_ROWS * V.dim), vh: f32(IMAGE_ROWS * hiddenStride),
       pin: f32(IMAGE_ROWS * 2 * V.dim), ph: f32(IMAGE_ROWS * T.hidden),
+      projected: f32(IMAGE_ROWS * T.dim),
       x: f32(rows * T.dim), normed: f32(rows * T.dim), qkv: f32(rows * 3 * T.dim),
       mixed: f32(rows * T.dim), hidden: f32(rows * T.hidden), down: f32(slotRows * this.manifest.head.rank),
       coordIn: f32(this.slots * 2 * T.dim), sizeIn: f32(this.slots * T.dim),
@@ -214,8 +217,10 @@ export class SlotModel {
     s.push(q(b.pin, "vision.proj_mlp.fc1", b.ph,
       { rows: IMAGE_ROWS, xStride: 2 * V.dim, yStride: T.hidden, gelu: true }));
     s.push({ copy: [b.initial, 0, b.x, 0, rows * T.dim * 4] });
-    s.push(q(b.ph, "vision.proj_mlp.fc2", b.x,
-      { rows: IMAGE_ROWS, xStride: T.hidden, yRow0: 1, yStride: T.dim }));
+    s.push(q(b.ph, "vision.proj_mlp.fc2", b.projected,
+      { rows: IMAGE_ROWS, xStride: T.hidden, yStride: T.dim }));
+    s.push(k.poolGrid(b.projected, b.x,
+      { side: GRID, pool: this.pool, xStride: T.dim, dim: T.dim, yRow0: 1, yStride: T.dim }));
 
     // Decoder: prefix rows attend to the prefix, slot rows to everything; adapters add
     // to slot rows only.

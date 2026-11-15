@@ -183,6 +183,23 @@ async function attentionKernel(device, kernels, { rows, dim, heads, prefix }) {
   return worst(await read(device, yBuffer, 0, y0.byteLength), want);
 }
 
+async function poolKernel(device, kernels, { side, pool, dim, yRow0 }) {
+  const rand = random(side * pool + dim), xStride = dim + 4, yStride = dim + 8;
+  const cells = Math.ceil(side / pool), x = floats(rand, side * side * xStride);
+  const y0 = floats(rand, (yRow0 + cells * cells) * yStride), want = y0.slice();
+  for (let cy = 0; cy < cells; cy++) for (let cx = 0; cx < cells; cx++) for (let i = 0; i < dim; i++) {
+    let sum = 0, count = 0;
+    for (let ry = cy * pool; ry < Math.min(side, (cy + 1) * pool); ry++) {
+      for (let rx = cx * pool; rx < Math.min(side, (cx + 1) * pool); rx++) { sum += x[(ry * side + rx) * xStride + i]; count++; }
+    }
+    want[(yRow0 + cy * cells + cx) * yStride + i] = sum / count;
+  }
+  const yBuffer = upload(device, y0);
+  const step = kernels.poolGrid(upload(device, x), yBuffer, { side, pool, xStride, dim, yRow0, yStride });
+  device.queue.submit([encode(device, [step])]);
+  return worst(await read(device, yBuffer, 0, y0.byteLength), want);
+}
+
 async function argmaxKernel(device, kernels, { rows, segments, width, y0 }) {
   const rand = random(rows * segments + width), xStride = segments * width + 6;
   const x = floats(rand, rows * xStride, 6), want = new Float32Array((y0 + rows * segments) * 2);
@@ -218,6 +235,8 @@ export async function run(query, log) {
     ["rotary", () => rotaryKernel(device, kernels, { rows: 11, stride: 3 * 128, dim: 128, heads: 2, position0: 3 })],
     ["attention, head width 64, prefix", () => attentionKernel(device, kernels, { rows: 13, dim: 128, heads: 2, prefix: 8 })],
     ["attention, head width 72, all rows", () => attentionKernel(device, kernels, { rows: 10, dim: 144, heads: 2, prefix: 0 })],
+    ["pool grid, 2 x 2 cells of a 7 x 7 grid", () => poolKernel(device, kernels, { side: 7, pool: 2, dim: 24, yRow0: 1 })],
+    ["pool grid, single cells", () => poolKernel(device, kernels, { side: 5, pool: 1, dim: 16, yRow0: 0 })],
     ["argmax and probability", () => argmaxKernel(device, kernels, { rows: 6, segments: 2, width: 300, y0: 3 })],
   ];
   const results = { passed: 0, failed: 0, cases: [] };

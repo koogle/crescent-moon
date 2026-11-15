@@ -275,6 +275,33 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 FIELDS.attention = ["rows", "stride", "dim", "heads", "prefix", "y_stride"];
 
+// y[y_row0 + cell] = mean of the rows of x in that pool x pool cell of a side x side grid
+// of rows (the last cell of a row or column is smaller); ceil(side / pool) ** 2 cells.
+export const poolGrid = `
+struct P { side: u32, pool: u32, x_stride: u32, dim: u32, y_row0: u32, y_stride: u32 }
+@group(0) @binding(0) var<uniform> p: P;
+@group(0) @binding(1) var<storage, read> x: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read_write> y: array<vec4<f32>>;
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+  let cells = (p.side + p.pool - 1u) / p.pool;
+  if (id.x >= (p.dim >> 2u) || id.y >= cells * cells) { return; }
+  let top = (id.y / cells) * p.pool;
+  let left = (id.y % cells) * p.pool;
+  var sum = vec4<f32>(0.0);
+  var count = 0.0;
+  for (var dy = 0u; dy < p.pool; dy++) {
+    for (var dx = 0u; dx < p.pool; dx++) {
+      if (top + dy < p.side && left + dx < p.side) {
+        sum += x[((top + dy) * p.side + left + dx) * (p.x_stride >> 2u) + id.x];
+        count += 1.0;
+      }
+    }
+  }
+  y[(p.y_row0 + id.y) * (p.y_stride >> 2u) + id.x] = sum / count;
+}`;
+FIELDS.poolGrid = ["side", "pool", "x_stride", "dim", "y_row0", "y_stride"];
+
 // For each row and each of `segments` runs of `width` logits: the index of the largest
 // logit and its softmax probability, written as two f32 at y[(y0 + row * segments + segment) * 2].
 export const argmax = `
@@ -389,6 +416,14 @@ export class Kernels {
     };
     return this.step(`attention-${width}`, attention(width), FIELDS.attention, values, [qkv, y],
       [Math.ceil(v.heads / 8), Math.ceil(Math.ceil(v.rows / QUERIES) / 8)]);
+  }
+
+  // v: { side, pool, xStride, dim, yRow0, yStride }
+  poolGrid(x, y, v) {
+    const cells = Math.ceil(v.side / v.pool) ** 2;
+    const values = { side: v.side, pool: v.pool, x_stride: v.xStride, dim: v.dim, y_row0: v.yRow0 ?? 0, y_stride: v.yStride };
+    return this.step("pool-grid", poolGrid, FIELDS.poolGrid, values, [x, y],
+      [Math.ceil(v.dim / 4 / 8), Math.ceil(cells / 8)]);
   }
 
   argmax(x, y, v) {

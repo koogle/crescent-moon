@@ -7,7 +7,7 @@ import { read } from "../kernels.js";
 import { SlotModel, loadWeights, patches, requestDevice } from "../model.js";
 import { candidates, select } from "../select.js";
 
-const TEXT_DIM = 2048, VISION_DIM = 1152, IMAGE_ROWS = 729, PREFIX = 730;
+const TEXT_DIM = 2048, VISION_DIM = 1152, IMAGE_ROWS = 729;
 // Largest difference allowed, as a share of the reference's largest magnitude.
 const ACTIVATION_TOLERANCE = 2e-3;
 
@@ -65,11 +65,11 @@ export async function run(query, log) {
       if (stage === "projection" && index === total) {
         const pin = await read(device, b.pin, 0, IMAGE_ROWS * 2 * VISION_DIM * 4);
         got.vision = columns(pin, IMAGE_ROWS, 2 * VISION_DIM, VISION_DIM);
-        got.projection = await read(device, b.x, row, IMAGE_ROWS * row);
+        got.projection = await read(device, b.projected, 0, IMAGE_ROWS * row);
       }
       const block = stage === "decoder" ? model.blockEnds.indexOf(index) : -1;
-      if (block in blocks) got[blocks[block]] = await read(device, b.x, 0, PREFIX * row);
-      if (block === 23) got.slots = await read(device, b.x, PREFIX * row, model.slotRows * row);
+      if (block in blocks) got[blocks[block]] = await read(device, b.x, 0, model.prefix * row);
+      if (block === 23) got.slots = await read(device, b.x, model.prefix * row, model.slotRows * row);
       if (stage === "decoder" && block >= 0) log(`  ${image}: decoder block ${block} done`);
     };
     const start = performance.now();

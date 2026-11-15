@@ -20,7 +20,7 @@ export async function run(query, log) {
   device.queue.submit([encode(device, [{ copy: [b.initial, 0, b.x, 0, b.x.size] }])]);
   device.queue.writeBuffer(b.x, row, projection);
   device.queue.submit([encode(device, model.stages.decoder.slice(0, model.blockEnds[0]))]);
-  const got = await read(device, b.x, 0, 730 * row);
+  const got = await read(device, b.x, 0, model.prefix * row);
   let error = 0, size = 0;
   for (let i = 0; i < want.length; i++) {
     error = Math.max(error, Math.abs(got[i] - want[i]));

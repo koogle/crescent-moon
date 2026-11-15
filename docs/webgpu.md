@@ -10,7 +10,7 @@ hand-written WGSL kernels for exactly that pass are the point of the work.
 
 | Milestone | State |
 |---|---|
-| 0. Model choice for the device | One crop measured for the current head ([training log](training-log.md), "Crops for the current head"). Two heads are training on the 4-bit backbone (`slots-teacher-coco-rank64-w4`, `-w4-crops1`); no result yet |
+| 0. Model choice for the device | Measured ([training log](training-log.md), "Crops for the current head", "Heads trained on the 4-bit backbone"): heads trained on the 4-bit backbone, with all crops and with one, do not beat the head trained on BF16 in the browser's configuration (4 bits, one crop: COCO F1 0.654 to 0.655 for all three), so the export keeps `slots-teacher-coco-rank64`. A head on a pooled image prefix (`prefix_pool` 2: 196 image positions instead of 729) is training |
 | 1. Export and reference | Implemented: `scripts/export_web.py`; the shards unpack to the model's weights bit for bit |
 | 2. Kernels with unit tests | Implemented: `web/kernels.js`, 14 cases in `web/tests/kernels.test.js` pass in headless Chromium |
 | 3. Full forward pass | Implemented: `web/model.js`, `web/select.js`. On three reference images every activation, bin, token and box matches PyTorch (below). The 500-image COCO comparison is not done |

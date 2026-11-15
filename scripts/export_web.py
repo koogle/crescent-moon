@@ -193,7 +193,9 @@ def reference(detector, image, folder):
     crop = detector.crop(image)
     vision, projection = detector.features(crop)
     trace = {}
-    cache = image_cache(inner, detector.functions, projection[None], trace=trace)
+    cache = image_cache(
+        inner, detector.functions, projection[None], trace=trace, pool=detector.prefix_pool
+    )
     objectness, box_logits, logits = head(
         inner.text, inner.region, cache, detector.functions.apply_rotary_emb, trace=trace
     )
@@ -268,6 +270,7 @@ def main():
             "slots": config["slots"],
             "label_tokens": config["label_tokens"],
             "rank": config["rank"],
+            "prefix_pool": detector.prefix_pool,
             "trained_weight_bits": config.get("weight_bits"),
             "trained_max_crops": config.get("max_crops"),
         },

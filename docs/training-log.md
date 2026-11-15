@@ -757,6 +757,40 @@ without tiles; VOC holds. The head was trained on the BF16 backbone; 4-bit numbe
 the starting point for training the head on the rounded backbone or for better 4-bit
 rounding.
 
+### Heads trained on the 4-bit backbone
+
+`weight_bits` in a training config rounds the backbone before the image features are
+encoded and the head is trained (`train_slots.configure_backbone`), and `max_crops`
+limits the vision encoder's crops the same way. Two runs with the data and settings of
+`slots-teacher-coco-rank64`, 3.4 and 3.3 hours on one H100:
+`slots-teacher-coco-rank64-w4` (4-bit backbone) and `slots-teacher-coco-rank64-w4-crops1`
+(4-bit backbone, one crop). Evaluated and studied as above, each on the backbone it was
+trained on (evaluations `slots-teacher-coco-rank64-w4-head-*-tiles2` and
+`-w4-crops1-*-tiles2`; the first row repeats the table above):
+
+| Head, backbone at evaluation | COCO F1, fast / tiled | COCO P / R, fast | COCO area, fast | Category AP, fast | VOC F1, fast / tiled | VOC area, fast |
+|---|---|---|---|---|---|---|
+| Trained on BF16, BF16 | 0.705 / 0.714 | 0.779 / 0.644 | 0.657 | 0.481 | 0.840 / 0.841 | 0.890 |
+| Trained on BF16, 4 bits | 0.660 / 0.682 | 0.735 / 0.598 | 0.597 | 0.431 | 0.851 / 0.826 | 0.875 |
+| Trained on 4 bits, 4 bits | 0.675 / 0.688 | 0.765 / 0.604 | 0.620 | 0.449 | 0.830 / 0.789 | 0.869 |
+| Trained on 4 bits and one crop, the same | 0.656 / 0.684 | 0.786 / 0.564 | 0.593 | 0.433 | 0.834 / 0.796 | 0.865 |
+
+Training the head on the rounded backbone recovers 1.5 of the 4.5 points of COCO F1 that
+rounding costs without tiles, and 0.6 of 3.2 with them; on VOC it is 2 to 4 points below
+the head trained on BF16. The adapters act only at slot positions, so they cannot repair
+the image prefix that the rounded backbone computes.
+
+In the configuration the browser runs (4 bits, one crop, no tiles), the three heads are
+equal on the 500 COCO images, each at its tuned threshold (runs `*-coco-device`):
+
+| Head | Precision | Recall | F1 |
+|---|---|---|---|
+| Trained on BF16 (`slots-teacher-coco-rank64`), threshold 0.33 | 0.805 | 0.551 | 0.654 |
+| Trained on 4 bits, threshold 0.29 | 0.754 | 0.579 | 0.655 |
+| Trained on 4 bits and one crop, threshold 0.31 | 0.782 | 0.562 | 0.654 |
+
+The browser export therefore keeps the head trained on BF16.
+
 `scripts/figures.py` draws the training curves, accuracy against latency per GPU,
 recall by object size and side-by-side example images from downloaded run outputs; the rendered figures are in
 the archive under `figures/`.
