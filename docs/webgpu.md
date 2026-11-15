@@ -15,7 +15,7 @@ hand-written WGSL kernels for exactly that pass are the point of the work.
 | 2. Kernels with unit tests | Implemented: `web/kernels.js`, 14 cases in `web/tests/kernels.test.js` pass in headless Chromium |
 | 3. Full forward pass | Implemented: `web/model.js`, `web/select.js`. On three reference images every activation, bin, token and box matches PyTorch (below). The 500-image COCO comparison is not done |
 | 4. On the device | The Camera tab's Model list has an entry "On this device" that runs the browser's detector; choosing it shows the weight download as its own step (a button with a progress bar), and the camera starts once the detector is loaded. A browser without WebGPU sees the entry disabled. It loads the model in headless Chromium; speed on a phone or a desktop GPU is not measured here |
-| 5. Speed | Not started; no speed has been measured on a real GPU |
+| 5. Speed | Measured on a Modal L4 through Chromium's WebGPU: 0.80 s per frame after three rounds of kernel tuning, from 2.46 s ("Speed" below). FP16 shader arithmetic and a phone are not measured |
 
 ## Decisions taken
 
@@ -91,14 +91,51 @@ Found on the way: `tanh` returned NaN for large arguments on SwiftShader, which 
 the first MLP of the vision encoder; GELU now clamps the argument to [-10, 10], where
 FP32's tanh is already 1.
 
+## Speed
+
+`modal_app.py::browser` runs suites of `web/tests/` in Chromium on a Modal GPU through
+Vulkan, against an export on the volume; `bench` times the pass per stage over several
+frames and, with GPU timestamp queries, per kernel:
+
+```sh
+uv run modal run modal_app.py::browser --run-id RUN --export slots-teacher-coco-rank64-w4 \
+  --suites bench,reference
+```
+
+One L4 (NVIDIA, FP32 shaders; the adapter does not offer `shader-f16`), the 4-bit export,
+median of warm frames, seconds per frame (runs `web-bench-*` on the volume under
+`evaluations/`):
+
+| Kernels | Vision | Decoder | Total |
+|---|---|---|---|
+| First version: scalar loads, 4 rows per invocation of the matrix product | 0.473 | 1.910 | 2.459 |
+| vec4 loads and dot products, 8 rows per invocation | 0.252 | 0.960 | 1.259 |
+| A tile of 4 outputs x 16 rows per invocation | 0.171 | 0.662 | 0.868 |
+| The same, and attention sharing key and value loads between 2 query rows | 0.166 | 0.600 | 0.801 |
+
+Other tiles of the matrix product (outputs x rows): 4 x 8 0.983, 8 x 8 0.907, 2 x 16 1.049,
+8 x 16 1.116 s. Attention with 4 or 8 query rows per invocation is slower than with one
+(1.40 and 1.36 s): its per-row state no longer fits in registers.
+
+GPU seconds per kernel in the last row: the decoder's quantised products 0.343, its
+attention 0.181, adapters 0.042, layer norm 0.023; the vision encoder's products 0.075,
+attention 0.057, layer norm 0.028. The decoder's products are 2.5 TFLOP, so they run at
+about 7 TFLOPS, close to what an L4 does in FP32; what is left to gain on this GPU is
+attention and layer norm, about 0.2 s. Beyond that the frame needs less arithmetic (fewer
+image positions in the prefix, which means training a head for it) or cheaper arithmetic
+(FP16 where a GPU is faster with it).
+
+With these kernels the pass matches the PyTorch reference on the L4 on all three images
+(36 of 36 checks; run `web-bench-final-l4`).
+
 ## Not done yet
 
 - The 500-image COCO comparison of milestone 3 (browser F1 within 0.005 of PyTorch at the
-  same rounding): one image takes about 33 minutes on SwiftShader, so it needs a real GPU.
+  same rounding): it needs a real GPU, which `modal_app.py::browser` now provides.
 - Timings on the iPhone 17 Pro and a desktop browser, and whether Safari's memory limit
   admits the 1.2 GB export (plus about 0.25 GB of activations and decoded parameters).
-- Timestamp queries: stage times on the page are wall-clock, with the GPU queue drained
-  after each stage.
+- Stage times on the camera page are wall-clock, with the GPU queue drained after each
+  stage; the benchmark uses timestamp queries.
 - Tracking on the device: the page's "Track across frames" applies to the server path.
 - The camera frame is resized by the browser's canvas, the reference crop by libvips;
   the effect on accuracy is unmeasured.

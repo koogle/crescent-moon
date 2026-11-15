@@ -84,6 +84,14 @@ node web/tests/run.cjs kernels
 node web/tests/run.cjs reference --export artifacts/web/RUN-w4 --timeout 300
 ```
 
+The same suites, and `bench` for seconds per stage and kernel, run on a Modal GPU through
+Chromium's WebGPU against an export on the volume:
+
+```sh
+uv run modal run modal_app.py::browser --run-id RUN --export slots-teacher-coco-rank64-w4 \
+  --suites bench,reference
+```
+
 ## Training
 
 A head is one config in `configs/` and one Modal call (an H100, about three hours for

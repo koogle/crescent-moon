@@ -3,6 +3,7 @@
 //
 //   node web/tests/run.cjs bench --export artifacts/web/NAME [--frames N] [--gpu vulkan]
 
+import { profile } from "../kernels.js";
 import { SlotModel, loadWeights, patches, requestDevice } from "../model.js";
 
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
@@ -17,7 +18,7 @@ export async function run(query, log) {
     features: [...adapter.features].sort(),
   };
   log(`adapter: ${JSON.stringify(described)}`);
-  const device = await requestDevice();
+  const device = await requestDevice(["timestamp-query"]);
   device.addEventListener("uncapturederror", (event) => log(`GPU ERROR ${event.error.message}`));
   const manifest = await (await fetch(new URL("manifest.json", base))).json();
   const started = performance.now();
@@ -38,5 +39,16 @@ export async function run(query, log) {
   const warm = frames.slice(1);
   const medians = Object.fromEntries(Object.keys(frames[0]).map((k) => [k, median(warm.map((f) => f[k]))]));
   log(`median of warm frames: ${JSON.stringify(medians)}`);
-  return { passed: 1, failed: 0, adapter: described, export: manifest.head, load_seconds: load, frames, median: medians };
+  // One more frame with GPU timestamps around every kernel: seconds per stage and kernel.
+  const kernels = {};
+  if (device.features.has("timestamp-query")) {
+    device.queue.writeBuffer(model.buffers.patches, 0, rows);
+    for (const [stage, steps] of Object.entries(model.stages)) {
+      for (const [label, seconds] of Object.entries(await profile(device, steps))) {
+        kernels[`${stage} ${label}`] = seconds;
+      }
+    }
+    log(`GPU seconds per kernel: ${JSON.stringify(kernels)}`);
+  }
+  return { passed: 1, failed: 0, adapter: described, kernels, export: manifest.head, load_seconds: load, frames, median: medians };
 }

@@ -341,7 +341,8 @@ export class SlotModel {
 }
 
 // Requests a device for the model: timestamp-free, with the storage limits it needs.
-export async function requestDevice() {
+// `features` are requested where the adapter has them.
+export async function requestDevice(features = []) {
   if (!navigator.gpu) throw new Error("This browser has no WebGPU");
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) throw new Error("No WebGPU adapter");
@@ -350,7 +351,8 @@ export async function requestDevice() {
     maxStorageBufferBindingSize: Math.min(need, adapter.limits.maxStorageBufferBindingSize),
     maxBufferSize: Math.min(need, adapter.limits.maxBufferSize),
   };
-  return adapter.requestDevice({ requiredLimits });
+  const requiredFeatures = features.filter((feature) => adapter.features.has(feature));
+  return adapter.requestDevice({ requiredLimits, requiredFeatures });
 }
 
 export async function loadModel(base, progress) {

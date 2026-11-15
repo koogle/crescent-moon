@@ -8,7 +8,9 @@
 
 const GROUP = 32; // weights per scale
 // The tile one invocation of the quantised product computes: outputs by token rows.
-const OUTS = 4, ROWS = 8;
+const OUTS = 4, ROWS = 16;
+// Query rows of one head an invocation of attention handles.
+const QUERIES = 2;
 const FIELDS = {};
 
 const GELU = `
@@ -214,35 +216,61 @@ fn load(at: u32) -> vec4<f32> { return qkv[at >> 2u]; }
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let head = id.x;
-  let row = id.y;
+  let row = id.y * ${QUERIES}u;
   if (head >= p.heads || row >= p.rows) { return; }
-  let keys = select(p.rows, p.prefix, row < p.prefix);
   let column = head * ${headWidth}u;
-  var q: array<vec4<f32>, ${quads}>;
-  var acc: array<vec4<f32>, ${quads}>;
-  for (var t = 0u; t < ${quads}u; t++) {
-    q[t] = load(row * p.stride + column + 4u * t) * ${1 / Math.sqrt(headWidth)};
-    acc[t] = vec4<f32>(0.0);
-  }
-  var top = -3.0e38;
-  var sum = 0.0;
-  for (var n = 0u; n < keys; n++) {
-    let k = n * p.stride + p.dim + column;
-    var score = 0.0;
-    for (var t = 0u; t < ${quads}u; t++) { score += dot(q[t], load(k + 4u * t)); }
-    if (score > top) {
-      let shrink = exp(top - score);
-      sum *= shrink;
-      for (var t = 0u; t < ${quads}u; t++) { acc[t] *= shrink; }
-      top = score;
+  // QUERIES rows of one head share every key and value load. A row past the end repeats
+  // the last and is not written.
+  var q: array<vec4<f32>, ${QUERIES * quads}>;
+  var acc: array<vec4<f32>, ${QUERIES * quads}>;
+  var keys: array<u32, ${QUERIES}>;
+  var top: array<f32, ${QUERIES}>;
+  var sum: array<f32, ${QUERIES}>;
+  var most = 0u;
+  for (var i = 0u; i < ${QUERIES}u; i++) {
+    let r = min(row + i, p.rows - 1u);
+    keys[i] = select(p.rows, p.prefix, r < p.prefix);
+    most = max(most, keys[i]);
+    top[i] = -3.0e38;
+    sum[i] = 0.0;
+    for (var t = 0u; t < ${quads}u; t++) {
+      q[i * ${quads}u + t] = load(r * p.stride + column + 4u * t) * ${1 / Math.sqrt(headWidth)};
+      acc[i * ${quads}u + t] = vec4<f32>(0.0);
     }
-    let weight = exp(score - top);
-    sum += weight;
-    let v = k + p.dim;
-    for (var t = 0u; t < ${quads}u; t++) { acc[t] += weight * load(v + 4u * t); }
   }
-  let to = row * p.y_stride + column;
-  for (var t = 0u; t < ${quads}u; t++) { y[(to >> 2u) + t] = acc[t] / sum; }
+  var key: array<vec4<f32>, ${quads}>;
+  var weight: array<f32, ${QUERIES}>;
+  for (var n = 0u; n < most; n++) {
+    let k = n * p.stride + p.dim + column;
+    for (var t = 0u; t < ${quads}u; t++) { key[t] = load(k + 4u * t); }
+    for (var i = 0u; i < ${QUERIES}u; i++) {
+      weight[i] = 0.0;
+      if (n < keys[i]) {
+        let base = i * ${quads}u;
+        var score = 0.0;
+        for (var t = 0u; t < ${quads}u; t++) { score += dot(q[base + t], key[t]); }
+        if (score > top[i]) {
+          let shrink = exp(top[i] - score);
+          sum[i] *= shrink;
+          for (var t = 0u; t < ${quads}u; t++) { acc[base + t] *= shrink; }
+          top[i] = score;
+        }
+        weight[i] = exp(score - top[i]);
+        sum[i] += weight[i];
+      }
+    }
+    let v = k + p.dim;
+    for (var t = 0u; t < ${quads}u; t++) {
+      let value = load(v + 4u * t);
+      for (var i = 0u; i < ${QUERIES}u; i++) { acc[i * ${quads}u + t] += weight[i] * value; }
+    }
+  }
+  for (var i = 0u; i < ${QUERIES}u; i++) {
+    if (row + i < p.rows) {
+      let to = ((row + i) * p.y_stride + column) >> 2u;
+      for (var t = 0u; t < ${quads}u; t++) { y[to + t] = acc[i * ${quads}u + t] / sum[i]; }
+    }
+  }
 }`;
 }
 FIELDS.attention = ["rows", "stride", "dim", "heads", "prefix", "y_stride"];
@@ -360,7 +388,7 @@ export class Kernels {
       y_stride: v.yStride,
     };
     return this.step(`attention-${width}`, attention(width), FIELDS.attention, values, [qkv, y],
-      [Math.ceil(v.heads / 8), Math.ceil(v.rows / 8)]);
+      [Math.ceil(v.heads / 8), Math.ceil(Math.ceil(v.rows / QUERIES) / 8)]);
   }
 
   argmax(x, y, v) {
@@ -388,6 +416,40 @@ export function encode(device, steps) {
   }
   if (pass) pass.end();
   return encoder.finish();
+}
+
+// Seconds on the GPU per kernel label for `steps`, each in its own pass between two
+// timestamps; the device needs the timestamp-query feature.
+export async function profile(device, steps) {
+  const kernels = steps.filter((step) => !step.copy);
+  const queries = device.createQuerySet({ type: "timestamp", count: 2 * kernels.length });
+  const bytes = 16 * kernels.length;
+  const resolved = device.createBuffer({ size: bytes, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+  const staging = device.createBuffer({ size: bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+  const encoder = device.createCommandEncoder();
+  let n = 0;
+  for (const step of steps) {
+    if (step.copy) { encoder.copyBufferToBuffer(...step.copy); continue; }
+    const pass = encoder.beginComputePass({
+      timestampWrites: { querySet: queries, beginningOfPassWriteIndex: 2 * n, endOfPassWriteIndex: 2 * n + 1 },
+    });
+    pass.setPipeline(step.pipeline);
+    pass.setBindGroup(0, step.group);
+    pass.dispatchWorkgroups(...step.dispatch);
+    pass.end();
+    n++;
+  }
+  encoder.resolveQuerySet(queries, 0, 2 * kernels.length, resolved, 0);
+  encoder.copyBufferToBuffer(resolved, 0, staging, 0, bytes);
+  device.queue.submit([encoder.finish()]);
+  await staging.mapAsync(GPUMapMode.READ);
+  const ticks = new BigUint64Array(staging.getMappedRange().slice(0));
+  staging.destroy(); resolved.destroy(); queries.destroy();
+  const seconds = {};
+  kernels.forEach((step, i) => {
+    seconds[step.label] = (seconds[step.label] ?? 0) + Number(ticks[2 * i + 1] - ticks[2 * i]) / 1e9;
+  });
+  return seconds;
 }
 
 export async function read(device, buffer, offset, bytes) {

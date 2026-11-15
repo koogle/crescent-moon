@@ -17,8 +17,8 @@ work. `docs/results.md` is the overview of the headline results.
   (selection), `tests/` (run with `node web/tests/run.cjs kernels`). The Python pass in
   `slots.py` / `train_slots.py` is the reference; `scripts/export_web.py` writes the
   weights and reference activations the browser tests compare against.
-- `modal_app.py`: Modal app `crescent-moon` (training, evaluation, Photon, deadline
-  supervisor). `demo_app.py` + `demo_camera.html`: Modal app `crescent-moon-demo`.
+- `modal_app.py`: Modal app `crescent-moon` (training, evaluation, Photon, the browser
+  runtime on a GPU, deadline supervisor). `demo_app.py` + `demo_camera.html`: Modal app `crescent-moon-demo`.
 - `configs/`: run configs. `scripts/`: studies, figures, label tools. `tests/`.
   `paper/`: LaTeX paper. `docs/`: plans and findings.
 

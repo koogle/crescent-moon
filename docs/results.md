@@ -71,7 +71,9 @@ unchanged. Log: "Video: MOT17".
 
 The browser's forward pass on the 4-bit export matches PyTorch on three images: every
 activation within 3.2e-4 of the largest value, every box bin, label token and selected
-box identical. Speed on a real GPU or a phone is not measured. Log: "Crops for the
+box identical, also on a real GPU. In Chromium on a Modal L4 the pass takes 0.80 s per
+frame (vision 0.17 s, decoder 0.60 s), from 2.46 s with the first kernels; a phone is not
+measured. Log: "Crops for the
 current head", "Low-bit backbone weights"; [`webgpu.md`](webgpu.md).
 
 ## What moved the result
