@@ -5,17 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Live camera detection</title>
 <style>
-  :root { --ink: #1f1f1e; --muted: #6b6a63; --line: #e4e3dd; --accent: #2a78d6; --surface: #fcfcfb; }
+  :root { --ink: #1f1f1e; --muted: #6b6a63; --line: #e4e3dd; --accent: #2a78d6; --surface: #fcfcfb;
+    --field: #ffffff; --idle: #b9b8b1; color-scheme: light; }
+  :root[data-theme=dark] { --ink: #f3f4f6; --muted: #9ca3af; --line: #374151; --accent: #3b8ae6;
+    --surface: #0b0f19; --field: #1f2937; --idle: #4b5563; color-scheme: dark; }
   body { margin: 0; font: 14px/1.4 system-ui, sans-serif; color: var(--ink); background: var(--surface); }
   .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 10px; }
   label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
   [hidden] { display: none !important; }
   label.inline { flex-direction: row; align-items: center; color: var(--ink); font-size: 14px; }
-  input[type=text], select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; min-width: 220px; }
+  input[type=text], select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; min-width: 220px;
+    color: var(--ink); background: var(--field); }
   button { font: inherit; padding: 7px 18px; border: 0; border-radius: 6px; background: var(--accent); color: white; cursor: pointer; }
   button.stop { background: #e34948; }
-  button:disabled { background: #b9b8b1; cursor: default; }
-  progress { width: 240px; height: 14px; }
+  button:disabled { background: var(--idle); cursor: default; }
+  progress { width: 240px; height: 14px; accent-color: var(--accent); }
   #downloadText { color: var(--muted); align-self: center; }
   .stage { position: relative; display: inline-block; background: #000; border-radius: 6px; overflow: hidden; line-height: 0; }
   video { display: block; max-width: 100%; max-height: 72vh; width: auto; height: auto; min-width: 320px; min-height: 240px; }
@@ -43,6 +47,23 @@
 <div id="status">The camera plays live; boxes from the last detected frame are drawn over it.</div>
 <script>
 const $ = (id) => document.getElementById(id);
+
+// The page follows the demo's light or dark theme: Gradio marks its body with the class
+// `dark`; opened on its own, the page follows the system setting.
+(() => {
+  const system = matchMedia("(prefers-color-scheme: dark)");
+  let host = null;
+  try { if (parent !== window) host = parent.document.body; } catch { /* another origin */ }
+  const apply = () => {
+    const dark = host ? host.classList.contains("dark") : system.matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    // Inside the demo the page takes the tab's own background.
+    document.body.style.background = host ? "transparent" : "";
+  };
+  apply();
+  system.addEventListener("change", apply);
+  if (host) new MutationObserver(apply).observe(host, { attributes: true, attributeFilter: ["class"] });
+})();
 const video = $("video"), overlay = $("overlay"), status = $("status"), toggle = $("toggle");
 const grab = document.createElement("canvas");
 const grabCrop = document.createElement("canvas");
