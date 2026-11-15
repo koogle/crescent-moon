@@ -85,6 +85,20 @@ photon_image = (
 kernel_image = with_source(modal.Image.from_registry(CUDA_IMAGE, add_python="3.12"))
 
 
+# Chromium with WebGPU on the container's GPU through Vulkan, for the browser runtime's
+# tests and speed (`web/tests/run.cjs --gpu vulkan`).
+browser_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .apt_install("nodejs", "npm", "libvulkan1", "vulkan-tools", "libegl1", "libgl1")
+    .run_commands(
+        "npm install -g playwright@1.56.1",
+        "npx playwright install --with-deps chromium",
+    )
+    .env({"NODE_PATH": "/usr/local/lib/node_modules", "NVIDIA_DRIVER_CAPABILITIES": "all"})
+    .add_local_dir(HERE / "web", "/root/repo/web")
+)
+
+
 def run_evaluation(run_id, config, provenance, deadline):
     from crescent_moon.run import evaluate as run
 
@@ -304,6 +318,52 @@ def train_slots(run_id, config, provenance, deadline):
 
 
 @app.function(
+    image=browser_image,
+    gpu="L4",
+    timeout=LAUNCH_LIMIT_SECONDS,
+    retries=0,
+    max_containers=1,
+    volumes={"/runs": volume},
+)
+def run_browser(run_id, config, provenance, deadline):
+    """Run suites of `web/tests/` in Chromium on this container's GPU against an export on
+    the volume (`web/<export>/`). config: {"export", "suites": [[suite, {option: value}]]}.
+    Each suite's results go to `evaluations/<run id>/<suite>.json`."""
+    out, _ = start(run_id, deadline)
+    out.mkdir(parents=True, exist_ok=True)
+    repo = Path("/root/repo")
+    served = repo / "artifacts" / "web"
+    served.mkdir(parents=True, exist_ok=True)
+    (served / config["export"]).symlink_to(Path("/runs/web") / config["export"])
+    gpu = subprocess.run(["vulkaninfo", "--summary"], capture_output=True, text=True, check=False)
+    report = {"provenance": provenance, "vulkan": (gpu.stdout + gpu.stderr)[-3000:], "suites": {}}
+    for suite, options in config["suites"]:
+        command = ["node", "web/tests/run.cjs", suite, "--gpu", "vulkan"]
+        command += [
+            "--export",
+            f"artifacts/web/{config['export']}",
+            "--out",
+            str(out / f"{suite}.json"),
+        ]
+        for name, value in options.items():
+            command += [f"--{name}", str(value)]
+        seconds = max(60, int(deadline - time.time()) - 60)
+        done = subprocess.run(
+            command, cwd=repo, capture_output=True, text=True, timeout=seconds, check=False
+        )
+        print(done.stdout[-6000:], done.stderr[-3000:])
+        result = out / f"{suite}.json"
+        report["suites"][suite] = {
+            "exit": done.returncode,
+            "log": done.stdout[-6000:],
+            "results": json.loads(result.read_text()) if result.exists() else None,
+        }
+    (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    volume.commit()
+    return report
+
+
+@app.function(
     image=control_image, cpu=0.25, memory=512, timeout=TRAIN_LIMIT_SECONDS + 600, retries=0
 )
 def enforce_deadline(call_ids, deadline):
@@ -390,3 +450,12 @@ def photon(run_id: str, config: str = "configs/moondream3.1-photon.json"):
 @app.local_entrypoint()
 def slots(run_id: str, config: str = "configs/slots-4-shards.json"):
     launch(train_slots, run_id, config, "report.json", gpu="H100", limit=TRAIN_LIMIT_SECONDS)
+
+
+@app.local_entrypoint()
+def browser(run_id: str, export: str, frames: int = 6, gpu: str = "L4", suites: str = "bench"):
+    """The browser runtime on a Modal GPU: `--suites bench,reference` times the pass and
+    compares it with the export's PyTorch reference."""
+    options = {"bench": {"frames": frames}, "reference": {"timeout": 30}, "kernels": {}}
+    config = {"export": export, "suites": [[name, options[name]] for name in suites.split(",")]}
+    launch(run_browser, run_id, config, "report.json", gpu=gpu)

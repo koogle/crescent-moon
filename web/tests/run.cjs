@@ -2,10 +2,12 @@
 //
 //   node web/tests/run.cjs kernels
 //   node web/tests/run.cjs reference --export artifacts/web/NAME [--image STEM] [--timeout MINUTES]
+//   node web/tests/run.cjs bench --export artifacts/web/NAME [--frames N] --gpu vulkan
 //
 // Serves the repository root on a local port, opens web/tests/index.html and prints the
-// page's log. This session's Chromium has no GPU, so WebGPU runs on SwiftShader (CPU):
-// correctness only.
+// page's log. `--gpu swiftshader` (the default) runs WebGPU on the CPU, for correctness
+// on a machine without a GPU; `--gpu vulkan` uses the machine's GPU through Vulkan
+// (`modal_app.py::browser` runs that on a Modal GPU).
 
 const http = require("http");
 const fs = require("fs");
@@ -37,10 +39,19 @@ function serve(request, response) {
   const query = new URLSearchParams({ suite });
   if (options.export) query.set("export", `/${options.export.replace(/\/$/, "")}/`);
   if (options.image) query.set("image", options.image);
-  const browser = await chromium.launch({
-    args: ["--enable-unsafe-webgpu", "--use-webgpu-adapter=swiftshader", "--enable-features=Vulkan",
-      "--use-angle=swiftshader"],
-  });
+  if (options.frames) query.set("frames", options.frames);
+  const adapters = {
+    swiftshader: { args: ["--use-webgpu-adapter=swiftshader", "--enable-features=Vulkan", "--use-angle=swiftshader"] },
+    // The full browser in its new headless mode; the headless shell has no GPU process.
+    vulkan: {
+      channel: "chromium",
+      args: ["--enable-features=Vulkan", "--use-angle=vulkan", "--ignore-gpu-blocklist",
+        "--disable-vulkan-surface", "--enable-gpu"],
+    },
+  };
+  const chosen = adapters[options.gpu || "swiftshader"];
+  if (!chosen) throw new Error(`Unknown --gpu ${options.gpu}`);
+  const browser = await chromium.launch({ channel: chosen.channel, args: ["--enable-unsafe-webgpu", ...chosen.args] });
   const page = await browser.newPage();
   page.on("console", (message) => console.log(message.text()));
   page.on("pageerror", (error) => console.log(`PAGE ERROR ${error}`));
