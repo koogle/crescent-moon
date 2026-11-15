@@ -56,7 +56,12 @@ export async function run(query, log) {
     const got = {};
     const b = model.buffers, row = TEXT_DIM * 4;
     const blocks = { 0: "prefix_00", 11: "prefix_11", 23: "prefix_23" };
+    const begun = performance.now();
     const probe = async (stage, index, total) => {
+      if (index === total) {
+        await device.queue.onSubmittedWorkDone();
+        log(`  ${image}: ${stage} done ${((performance.now() - begun) / 1000).toFixed(0)} s after the start`);
+      }
       if (stage === "projection" && index === total) {
         const pin = await read(device, b.pin, 0, IMAGE_ROWS * 2 * VISION_DIM * 4);
         got.vision = columns(pin, IMAGE_ROWS, 2 * VISION_DIM, VISION_DIM);

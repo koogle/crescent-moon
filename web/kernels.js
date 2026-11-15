@@ -11,8 +11,10 @@ const FIELDS = {};
 
 const GELU = `
 fn gelu(v: vec4<f32>) -> vec4<f32> {
-  // tanh approximation, as torch.nn.functional.gelu(approximate="tanh")
-  return 0.5 * v * (1.0 + tanh(0.7978845608028654 * (v + 0.044715 * v * v * v)));
+  // tanh approximation, as torch.nn.functional.gelu(approximate="tanh"). tanh is 1 in
+  // f32 beyond 10, and some implementations return NaN for large arguments.
+  let t = clamp(0.7978845608028654 * (v + 0.044715 * v * v * v), vec4<f32>(-10.0), vec4<f32>(10.0));
+  return 0.5 * v * (1.0 + tanh(t));
 }`;
 
 // Offsets of the four rows one invocation handles; rows past the end repeat the last
@@ -137,12 +139,12 @@ export const geluInPlace = `
 struct P { first: u32, count: u32, width: u32 }
 @group(0) @binding(0) var<uniform> p: P;
 @group(0) @binding(1) var<storage, read_write> y: array<f32>;
+${GELU}
 @compute @workgroup_size(64, 4)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let i = id.y * p.width + id.x;
   if (id.x >= p.width || i >= p.count) { return; }
-  let v = y[p.first + i];
-  y[p.first + i] = 0.5 * v * (1.0 + tanh(0.7978845608028654 * (v + 0.044715 * v * v * v)));
+  y[p.first + i] = gelu(vec4<f32>(y[p.first + i])).x;
 }`;
 FIELDS.geluInPlace = ["first", "count", "width"];
 

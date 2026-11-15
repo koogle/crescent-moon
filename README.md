@@ -753,6 +753,23 @@ image against 0.208 s. The slot pass is a fifth of that time, so fewer positions
 would save little; the vision encoder is the largest stage, and limiting it to one crop
 costs 1.5 points of F1 with a head trained on full-crop features.
 
+### Crops for the current head
+
+`slots-teacher-coco-rank64` at threshold 0.29 without tiles, with the vision encoder
+limited to one or two crops (`--max-crops`; runs `slots-teacher-coco-rank64-coco-crops1`
+and `-crops2`, and `cm-move-rank64-coco` for all crops), 500 COCO val images on an L40S:
+
+| Crops | Precision | Recall | F1 | Recall, small | Seconds per image |
+|---|---|---|---|---|---|
+| All (up to 12) | 0.776 | 0.642 | 0.702 | 0.329 | 0.078 |
+| 2 | 0.769 | 0.616 | 0.684 | 0.281 | 0.059 |
+| 1 | 0.768 | 0.616 | 0.684 | 0.283 | 0.046 |
+
+One crop costs 1.8 points of F1, most of it recall on small objects, and takes 0.59 of
+the time. With one crop Moondream's local crop is the global crop, so the vision encoder
+runs once. The head was trained on all-crop features; `slots-teacher-coco-rank64-w4-crops1`
+trains it on one-crop features of the 4-bit backbone.
+
 ### Low-bit backbone weights
 
 For running on a phone or in a browser, `--weight-bits` rounds every Linear weight of
@@ -881,6 +898,12 @@ uv pip install -e ".[dev,modal]"
   --config configs/slots-coco.json --slots-run slots-bins-16
 .venv/bin/python scripts/figures.py --artifacts artifacts --out artifacts/figures
 .venv/bin/python demo_app.py
+
+# Browser runtime: export a head, test the kernels and the full pass (docs/webgpu.md).
+.venv/bin/python scripts/export_web.py --head artifacts/heads/RUN/head.pt \
+  --out artifacts/web/RUN-w4 --bits 4 --threshold 0.29 --images artifacts/web-images/*.jpg
+node web/tests/run.cjs kernels
+node web/tests/run.cjs reference --export artifacts/web/RUN-w4 --timeout 300
 
 # Recompute scores from saved predictions.
 .venv/bin/python -m crescent_moon.run score \

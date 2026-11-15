@@ -9,7 +9,13 @@ before touching the on-device work.
   (training, `SlotDetector` inference with tiling), `merge.py` (selection), `run.py`
   (evaluation harness), `tasks.py` (datasets), `metrics.py`, `tracking.py`,
   `quantize.py`, `teacher.py` / `images.py` (OpenRouter labelling), `moondream.py`,
-  `photon.py`, `kernel.py` + `decode_step.cu`, `demo.py`, `deadline.py`.
+  `photon.py`, `kernel.py` + `decode_step.cu`, `demo.py`, `deadline.py`, `pack.py` (the
+  packed weight format the browser reads).
+- `web/`: the detector in the browser, plain JavaScript and WGSL with no build step:
+  `kernels.js` (WGSL kernels), `model.js` (loader, forward pass), `select.js`
+  (selection), `tests/` (run with `node web/tests/run.cjs kernels`). The Python pass in
+  `slots.py` / `train_slots.py` is the reference; `scripts/export_web.py` writes the
+  weights and reference activations the browser tests compare against.
 - `modal_app.py`: Modal app `crescent-moon` (training, evaluation, Photon, deadline
   supervisor). `demo_app.py` + `demo_camera.html`: Modal app `crescent-moon-demo`.
 - `configs/`: run configs. `scripts/`: studies, figures, label tools. `tests/`.

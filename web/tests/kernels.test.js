@@ -53,6 +53,7 @@ async function quantised(device, kernels, bits, { rows, columns, outs, add, acti
   }
   const xStride = padded + 32, yStride = outs + 5 + yCol0;
   const x = floats(rand, (xRow0 + rows) * xStride), bias = floats(rand, outs);
+  if (activation) { bias[0] = 300; bias[1] = -300; } // far past f32's tanh range
   for (let r = 0; r < xRow0 + rows; r++) for (let c = columns; c < padded; c++) x[r * xStride + c] = 0;
   const y0 = floats(rand, (yRow0 + rows) * yStride);
   const want = y0.slice();
@@ -126,6 +127,8 @@ async function norm(device, kernels, { rows, dim, yCol0 }) {
 async function geluKernel(device, kernels, { first, count }) {
   const rand = random(count);
   const y0 = floats(rand, first + count + 9, 4), want = y0.slice();
+  // Magnitudes at which the cubic inside tanh is far past f32's tanh range.
+  [-300, -40, 40, 300].forEach((v, i) => { y0[first + i] = v; });
   for (let i = 0; i < count; i++) want[first + i] = gelu(y0[first + i]);
   const yBuffer = upload(device, y0);
   device.queue.submit([encode(device, [kernels.gelu(yBuffer, first, count)])]);

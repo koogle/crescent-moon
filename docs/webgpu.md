@@ -1,15 +1,79 @@
-# Plan: the slot detector in the browser on hand-written WebGPU kernels
+# The slot detector in the browser on hand-written WebGPU kernels
 
-Status: plan, nothing implemented. Goal: run the one-pass slot detector of
-[this repository](../README.md) on the device,
+Goal: run the one-pass slot detector of [this repository](../README.md) on the device,
 for live camera detection in a phone's browser (target: iPhone 17 Pro, Safari, WebGPU)
-without a server round trip. The detector today runs on a Modal GPU; the demo's Camera
-page (`demo_camera.html`) already plays the camera locally and
-draws boxes over it, so only inference moves.
+without a server round trip. Runtime libraries (ONNX Runtime Web, Transformers.js) are
+not used: the model is one fixed forward pass of large batched matrix products, and
+hand-written WGSL kernels for exactly that pass are the point of the work.
 
-Runtime libraries (ONNX Runtime Web, Transformers.js) are not used: the model is one
-fixed forward pass of large batched matrix products, and hand-written WGSL kernels for
-exactly that pass are the point of the work.
+## Status
+
+| Milestone | State |
+|---|---|
+| 0. Model choice for the device | One crop measured for the current head ([README](../README.md), "Crops for the current head"). Heads trained on the 4-bit backbone: STATUS_M0 |
+| 1. Export and reference | Implemented: `scripts/export_web.py`; the shards unpack to the model's weights bit for bit |
+| 2. Kernels with unit tests | Implemented: `web/kernels.js`, 14 cases in `web/tests/kernels.test.js` pass in headless Chromium |
+| 3. Full forward pass | Implemented: `web/model.js`, `web/select.js`. STATUS_M3 |
+| 4. On the device | The camera page's "Run on this device" switch is implemented and loads the model in headless Chromium; not yet run on a phone or a desktop GPU |
+| 5. Speed | Not started; no speed has been measured on a real GPU |
+
+## Decisions taken
+
+- **JavaScript + WGSL with no build step.** `web/` is three ES modules the page imports.
+- **Weights come from the demo's Modal app**, which serves the export from the volume
+  (`web/<export name>/`) under `/weights/`; nothing is published for it. The browser
+  keeps the shards in Cache Storage, keyed by content, so they download once.
+- **Code layout**: runtime in `web/`, packing in `src/crescent_moon/pack.py`, export in
+  `scripts/export_web.py`, the switch in `demo_camera.html`.
+- **One crop.** The device runs `max_crops` 1, for which Moondream's local crop equals
+  the global crop: the vision encoder runs once and its features are used twice.
+- **No key/value cache.** Prefix and slot positions go through each decoder block
+  together (1,018 rows): prefix rows attend to the prefix, slot rows to everything, and
+  adapters add to slot rows only. This is the same arithmetic as the Python pass with
+  its prefix cache and keeps one block's keys and values in memory instead of 24.
+- **FP32 arithmetic in the shaders**, with weights decoded from 4-bit fields and FP16
+  scales as they are read. `shader-f16` is tuning work for milestone 5.
+
+## Implementation
+
+`scripts/export_web.py` rounds every Linear the detector uses (`--bits`, per component
+with `--component-bits`) with one FP16 scale per group of 32 inputs, packs integers and
+scales as `src/crescent_moon/pack.py` describes, stores the head's adapters and the small
+parameters in FP16, and writes shards of at most 256 MB with a manifest (place and
+SHA-256 of every blob, the vocabulary, the selection settings). The exported 4-bit
+model is 1.2 GB. It then runs the PyTorch pass in float32 on exactly the stored weights
+for each `--images` file and writes the crop, the vision features, the projected
+embeddings, the prefix hidden state after blocks 0, 11 and 23, the slots' final hidden
+state, every slot's outputs and the selected boxes.
+
+`web/kernels.js` holds seven kernels: the quantised matrix product (four rows per
+invocation, each weight decoded once; optional add-into and GELU), the FP16 matrix
+product for adapters and objectness, layer norm, GELU, rotary embedding, attention with
+an online softmax over a fused qkv matrix, and argmax with its softmax probability.
+`web/model.js` loads an export into GPU buffers and builds the pass as a fixed list of
+dispatches; `web/select.js` decodes bins, scores slots and fuses duplicates as
+`merge.select` does for one view.
+
+Tests run in headless Chromium, whose WebGPU here is SwiftShader on the CPU:
+
+```sh
+node web/tests/run.cjs kernels
+node web/tests/run.cjs reference --export artifacts/web/NAME --timeout 300
+```
+
+VERIFICATION
+
+## Not done yet
+
+- The 500-image COCO comparison of milestone 3 (browser F1 within 0.005 of PyTorch at the
+  same rounding): one image takes about RUNTIME on SwiftShader, so it needs a real GPU.
+- Timings on the iPhone 17 Pro and a desktop browser, and whether Safari's memory limit
+  admits the 1.2 GB export (plus about 0.25 GB of activations and decoded parameters).
+- Timestamp queries: stage times on the page are wall-clock, with the GPU queue drained
+  after each stage.
+- Tracking on the device: the page's "Track across frames" applies to the server path.
+- The camera frame is resized by the browser's canvas, the reference crop by libvips;
+  the effect on accuracy is unmeasured.
 
 ## What runs per frame
 
@@ -86,9 +150,7 @@ does not shrink with fewer slots.
   on an L40S and cost 1.5 points of COCO F1 for an older head (`slots-bins-16`); not yet
   measured for the current head.
 
-## Milestones
-
-Each milestone is its own pull request; findings go in their own documentation change.
+## Milestones as planned
 
 0. **Model choice for the device** (Python, Modal).
    Close the 4-bit gap and fix the configuration the browser will run:
@@ -135,12 +197,3 @@ The cloud session has Chromium with Playwright. First task of milestone 2: confi
 WebGPU works in headless Chromium there (software adapter), otherwise use Dawn's
 Node.js bindings for kernel tests. Correctness is tested there; speed only on real
 devices, which the user runs.
-
-## Decisions to confirm at the start
-
-- JavaScript + WGSL with no build step (recommended for iterating in Safari) or the
-  Rust/WebAssembly orchestration of [the existing sketch](browser-inference.md).
-- Where the browser fetches weights: a public HF repository (Moondream 2 is
-  Apache-2.0; the head is ours) or the demo's Modal app.
-- Code location: kernels and loader in `inference/web/`, export in
-  `post-training/detection/scripts/`, the switch in the detection demo.
