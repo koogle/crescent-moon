@@ -3,7 +3,7 @@
 Two stages, both writing under one run folder:
 
 - `encode` runs the frozen vision encoder over one shard of images, from a COCO Parquet
-  shard (`coco_items`) or from images labelled by `parallel_detection.teacher`
+  shard (`coco_items`) or from images labelled by `crescent_moon.teacher`
   (`teacher_items`), and saves the 729 image embeddings per image (raw BF16 bits) with the
   image's kept objects.
 - `train` loads those shards, trains the slot head and writes `metrics.jsonl`,
@@ -33,8 +33,8 @@ from types import SimpleNamespace
 import numpy as np
 import torch
 
-from parallel_detection.merge import select, tile_grid
-from parallel_detection.slots import (
+from crescent_moon.merge import select, tile_grid
+from crescent_moon.slots import (
     COORDINATES,
     PREFIX,
     SlotHead,
@@ -48,7 +48,7 @@ from parallel_detection.slots import (
     to_corners,
     total,
 )
-from parallel_detection.tasks import COCO_NAMES
+from crescent_moon.tasks import COCO_NAMES
 
 IMAGE_TOKENS = PREFIX - 1
 # Objects covering less than this share of the image are reported as small.
@@ -203,7 +203,7 @@ def coco_tile_items(parquet, config, settings, limit):
 
 
 def teacher_items(labels, images, config):
-    """(image reader, record) for usable images labelled by `parallel_detection.teacher`.
+    """(image reader, record) for usable images labelled by `crescent_moon.teacher`.
 
     `labels` is the teacher's JSONL file and `images` the folder its manifest paths are
     relative to. Boxes are in pixels of the stored image.
@@ -325,7 +325,7 @@ def heldout_scores(
     A detection counts when its box overlaps an unmatched truth box of the same decoded
     label by at least 0.5.
     """
-    from parallel_detection.boxes import match as match_boxes
+    from crescent_moon.boxes import match as match_boxes
 
     head.eval()
     sums, counts = {}, 0
@@ -639,7 +639,7 @@ class SlotDetector:
         if weight_bits is not None:
             if backbone is not None:
                 raise ValueError("weight_bits would change a shared backbone")
-            from parallel_detection.quantize import round_weights_
+            from crescent_moon.quantize import round_weights_
 
             layers, weights = round_weights_(self.inner, weight_bits, weight_group)
             print(f"Rounded {layers} Linear layers ({weights:,} weights) to {weight_bits} bits")

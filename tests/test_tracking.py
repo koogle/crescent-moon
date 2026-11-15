@@ -1,4 +1,4 @@
-from parallel_detection.tracking import Tracker
+from crescent_moon.tracking import Tracker
 
 
 def test_tracks_keep_ids_smooth_boxes_and_coast_one_frame():

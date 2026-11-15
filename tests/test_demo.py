@@ -1,7 +1,7 @@
 import pytest
 
-from parallel_detection.demo import detections, draw, phrases_of, stream_video
-from parallel_detection.tasks import COCO_NAMES
+from crescent_moon.demo import detections, draw, phrases_of, stream_video
+from crescent_moon.tasks import COCO_NAMES
 
 
 def test_phrases_and_detections():

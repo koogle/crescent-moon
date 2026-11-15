@@ -10,7 +10,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from parallel_detection.boxes import areas, iou_matrix, match
+from crescent_moon.boxes import areas, iou_matrix, match
 
 IOU_THRESHOLDS = (0.5, 0.75)
 # COCO's size classes, by truth-box area in pixels of the original image.
@@ -281,7 +281,7 @@ def best_threshold(records, dataset, grid=None):
 
     The default grid covers products of several confidences, which can be small.
     """
-    from parallel_detection.run import above
+    from crescent_moon.run import above
 
     if grid is None:
         grid = np.unique(

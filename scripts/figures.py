@@ -22,8 +22,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from parallel_detection.metrics import best_threshold, ranked_ap, ranked_curve, summarize
-from parallel_detection.run import above, fetch_image, read_records
+from crescent_moon.metrics import best_threshold, ranked_ap, ranked_curve, summarize
+from crescent_moon.run import above, fetch_image, read_records
 
 SURFACE, INK, MUTED, GRID = "#fcfcfb", "#1f1f1e", "#6b6a63", "#e4e3dd"
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"

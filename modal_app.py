@@ -1,6 +1,6 @@
 """Detection runs on one Modal GPU, each stopped within an hour of launch.
 
-Run from post-training/detection/:
+Run from the repository root:
 
     modal run --detach modal_app.py::main --run-id moondream2-001
     modal run --detach modal_app.py::decoders --run-id decoders-001
@@ -12,7 +12,7 @@ Run from post-training/detection/:
 `main` evaluates a config (default `configs/moondream2.json`) on an L4. `slots` trains
 the slot head of a slots config on an H100 within eight hours of launch. `photon`
 evaluates a config through Moondream's Photon engine on an L40S. `decoders` runs `configs/decoders.json`
-once per decoder (PyTorch eager, this folder's loop, the custom CUDA kernels,
+once per decoder (PyTorch eager, this repository's loop, the custom CUDA kernels,
 torch.compile) on the same images and reports how each agrees with eager.
 
 Each launch is one GPU call with `retries=0`, writing predictions image by image and
@@ -37,18 +37,14 @@ TRAIN_LIMIT_SECONDS = 8 * 60 * 60
 COMMIT_EVERY_IMAGES = 50
 
 HERE = Path(__file__).parent
-if modal.is_local():
-    PACKAGE = HERE / "src" / "parallel_detection"
-    DEADLINE = HERE.parents[1] / "training" / "workflows" / "deadline.py"
-else:
-    PACKAGE = Path("/root/parallel_detection")
-    DEADLINE = Path("/root/workflows/deadline.py")
+PACKAGE = HERE / "src" / "crescent_moon" if modal.is_local() else Path("/root/crescent_moon")
+# The volume keeps the name it was created under; it holds the trained heads.
+VOLUME = "lm-exploration-parallel-detection"
 
-app = modal.App("lm-exploration-parallel-detection")
-volume = modal.Volume.from_name("lm-exploration-parallel-detection", create_if_missing=True)
-# The repository's shared deadline helpers, used by both functions.
-control_image = modal.Image.debian_slim(python_version="3.12").add_local_file(
-    DEADLINE, "/root/workflows/deadline.py"
+app = modal.App("crescent-moon")
+volume = modal.Volume.from_name(VOLUME, create_if_missing=True)
+control_image = modal.Image.debian_slim(python_version="3.12").add_local_dir(
+    PACKAGE, "/root/crescent_moon"
 )
 PACKAGES = (
     "torch==2.6.0",
@@ -63,7 +59,7 @@ PACKAGES = (
     "pyarrow==20.0.0",
     "huggingface-hub==0.32.4",
 )
-# The CUDA development image exploration/teacher-rollouts builds its kernels with.
+# The CUDA development image the decode kernels are built with.
 CUDA_IMAGE = "nvidia/cuda@sha256:6617a625f4090c76c545a0e7d63f2e441718ef9af7f4efe7dd1242a29e289fd7"
 
 
@@ -71,8 +67,7 @@ def with_source(base):
     return (
         base.pip_install(*PACKAGES)
         .env({"HF_HOME": "/runs/hf-cache"})
-        .add_local_file(DEADLINE, "/root/workflows/deadline.py")
-        .add_local_dir(PACKAGE, "/root/parallel_detection")
+        .add_local_dir(PACKAGE, "/root/crescent_moon")
     )
 
 
@@ -85,14 +80,13 @@ photon_image = (
         *[p for p in PACKAGES if p.startswith(("numpy", "scipy", "pillow", "pyarrow"))],
     )
     .env({"HF_HOME": "/runs/hf-cache"})
-    .add_local_file(DEADLINE, "/root/workflows/deadline.py")
-    .add_local_dir(PACKAGE, "/root/parallel_detection")
+    .add_local_dir(PACKAGE, "/root/crescent_moon")
 )
 kernel_image = with_source(modal.Image.from_registry(CUDA_IMAGE, add_python="3.12"))
 
 
 def run_evaluation(run_id, config, provenance, deadline):
-    from parallel_detection.run import evaluate as run
+    from crescent_moon.run import evaluate as run
 
     out, saved = start(run_id, deadline)
     if (out / "summary.json").exists():
@@ -155,9 +149,9 @@ def compare_decoders(run_id, config, provenance, deadline):
 
     import torch
 
-    from parallel_detection.metrics import agreement
-    from parallel_detection.run import evaluate as run
-    from parallel_detection.run import read_records
+    from crescent_moon.metrics import agreement
+    from crescent_moon.run import evaluate as run
+    from crescent_moon.run import read_records
 
     out, saved = start(run_id, deadline)
     if (out / "comparison.json").exists():
@@ -219,7 +213,7 @@ def train_slots(run_id, config, provenance, deadline):
 
     from huggingface_hub import hf_hub_download
 
-    from parallel_detection.train_slots import (
+    from crescent_moon.train_slots import (
         coco_items,
         coco_tile_items,
         encode,
@@ -312,7 +306,7 @@ def train_slots(run_id, config, provenance, deadline):
 )
 def enforce_deadline(call_ids, deadline):
     """Independent supervisor: cancel every call of this launch still running at its deadline."""
-    from workflows.deadline import calls_finished, cancel_at_deadline
+    from crescent_moon.deadline import calls_finished, cancel_at_deadline
 
     cancelled = cancel_at_deadline(
         deadline, lambda: call_ids, lambda: calls_finished(call_ids), poll_seconds=60
@@ -341,7 +335,7 @@ def launch(function, run_id, config, result_name, gpu="L4", limit=LAUNCH_LIMIT_S
         "call": call.object_id,
         "supervisor": supervisor.object_id,
         "deadline_unix": deadline,
-        "results": f"lm-exploration-parallel-detection/evaluations/{run_id}/",
+        "results": f"{VOLUME}/evaluations/{run_id}/",
     }
     (out / "launch.json").write_text(json.dumps(record, indent=2) + "\n")
     print(json.dumps(record, indent=2))

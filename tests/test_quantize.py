@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from parallel_detection.quantize import round_weights_
+from crescent_moon.quantize import round_weights_
 
 
 def linears(model):

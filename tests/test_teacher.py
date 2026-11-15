@@ -1,4 +1,4 @@
-from parallel_detection.teacher import consensus, parse
+from crescent_moon.teacher import consensus, parse
 
 
 def test_parse_reads_gemini_style_boxes_and_drops_unknown_labels():
@@ -33,7 +33,7 @@ def test_save_resizes_and_skips_existing_images(tmp_path):
 
     from PIL import Image
 
-    from parallel_detection.images import save
+    from crescent_moon.images import save
 
     buffer = io.BytesIO()
     Image.new("RGB", (2048, 1024)).save(buffer, format="JPEG")

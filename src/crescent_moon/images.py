@@ -1,6 +1,6 @@
 """Training images from Open Images, Objects365 and COCO, for teacher labelling.
 
-    python -m parallel_detection.images --config configs/teacher-images.json \
+    python -m crescent_moon.images --config configs/teacher-images.json \
         --out artifacts/teacher-images
 
 Writes `<out>/<source>/<id>.jpg`, with the longest side at most `max_side`, and appends

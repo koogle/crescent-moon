@@ -28,9 +28,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from study_selection import image_sizes, load
 from video_stability import stability, track_ids
 
-from parallel_detection.merge import select
-from parallel_detection.metrics import summarize
-from parallel_detection.tracking import Tracker
+from crescent_moon.merge import select
+from crescent_moon.metrics import summarize
+from crescent_moon.tracking import Tracker
 
 # (name, tile_max_cells)
 MODES = (("fast", None), ("tiled", 4))

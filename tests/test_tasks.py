@@ -1,5 +1,5 @@
-from parallel_detection.run import predict
-from parallel_detection.tasks import COCO_NAMES, coco_samples, lvis_samples, refcoco_m_samples
+from crescent_moon.run import predict
+from crescent_moon.tasks import COCO_NAMES, coco_samples, lvis_samples, refcoco_m_samples
 
 LVIS = {
     "categories": [
@@ -120,7 +120,7 @@ def test_predict_joins_detections_to_queries(tmp_path):
 
 
 def test_above_keeps_boxes_at_or_over_the_threshold():
-    from parallel_detection.run import above
+    from crescent_moon.run import above
 
     record = {"predicted": [[0, 0, 1, 1], [1, 1, 2, 2]], "scores": [0.4, 0.9]}
     assert above([record], 0.5)[0]["predicted"] == [[1, 1, 2, 2]]
@@ -145,7 +145,7 @@ def test_coco_tuning_split_does_not_overlap_the_evaluation_split():
 
 
 def test_voc_annotation_and_samples():
-    from parallel_detection.tasks import voc_annotation, voc_samples
+    from crescent_moon.tasks import voc_annotation, voc_samples
 
     xml = b"""<annotation><filename>000001.jpg</filename>
     <size><width>100</width><height>80</height><depth>3</depth></size>
@@ -166,7 +166,7 @@ def test_voc_annotation_and_samples():
 
 
 def test_mot_samples_take_people_on_every_nth_frame():
-    from parallel_detection.tasks import mot_samples
+    from crescent_moon.tasks import mot_samples
 
     lines = [
         "1,1,11,21,10,20,1,1,1.0",  # pedestrian

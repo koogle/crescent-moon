@@ -1,10 +1,10 @@
 # Plan: the slot detector in the browser on hand-written WebGPU kernels
 
 Status: plan, nothing implemented. Goal: run the one-pass slot detector of
-[`post-training/detection/`](../../../post-training/detection/README.md) on the device,
+[this repository](../README.md) on the device,
 for live camera detection in a phone's browser (target: iPhone 17 Pro, Safari, WebGPU)
 without a server round trip. The detector today runs on a Modal GPU; the demo's Camera
-page (`post-training/detection/demo_camera.html`) already plays the camera locally and
+page (`demo_camera.html`) already plays the camera locally and
 draws boxes over it, so only inference moves.
 
 Runtime libraries (ONNX Runtime Web, Transformers.js) are not used: the model is one
@@ -18,7 +18,7 @@ the trained slot head (`slots-teacher-coco-rank64`, the demo's default; HF archi
 `jfrick/lm-exploration-results`, `pr-167/post-training/detection/`). Source of truth for
 shapes and order of operations: the model's Hub code (`config.py`, `vision.py`,
 `text.py`, `region.py`, `rope.py`, `layers.py`, `image_crops.py`) and
-`post-training/detection/src/parallel_detection/slots.py` and `train_slots.py`
+`post-training/detection/src/crescent_moon/slots.py` and `train_slots.py`
 (`SlotDetector._encode`, `_decode`, `image_cache`, `sample`).
 
 1. **Crops.** `vision.prepare_crops`: a global 378 x 378 crop plus local crops (up to
@@ -73,7 +73,7 @@ does not shrink with fewer slots.
 
 ## Facts that set constraints
 
-- **Weight precision** (measured, `post-training/detection/README.md`, "Low-bit backbone
+- **Weight precision** (measured, [README](../README.md), "Low-bit backbone
   weights"): rounding every backbone Linear to 8 bits per block of 32 costs nothing
   (COCO F1 0.705 -> 0.705); 4 bits costs 4.5 points (0.705 -> 0.660, area 0.657 ->
   0.597; VOC unchanged). `quantize.round_weights_` is that rounding.
@@ -90,7 +90,7 @@ does not shrink with fewer slots.
 
 Each milestone is its own pull request; findings go in their own documentation change.
 
-0. **Model choice for the device** (Python, Modal; `post-training/detection/`).
+0. **Model choice for the device** (Python, Modal).
    Close the 4-bit gap and fix the configuration the browser will run:
    - train the slot head on the 4-bit-rounded backbone (its adapters see the rounded
      weights; a `weight_bits` option in training through `round_weights_`);
@@ -99,7 +99,7 @@ Each milestone is its own pull request; findings go in their own documentation c
    - measure one crop and `max_crops` 1-2 for the current head.
    Done when one configuration (bits per component, crops) is chosen with its COCO and
    VOC numbers in the README.
-1. **Export and reference** (Python). A script in `post-training/detection/scripts/`
+1. **Export and reference** (Python). A script in `scripts/`
    that writes, for the chosen head and configuration:
    - packed weights: per tensor, signed integers row-major [out, in] packed into u32
      words, one FP16 scale per block of 32 along the input; adapters, norms, biases,
@@ -111,7 +111,7 @@ Each milestone is its own pull request; findings go in their own documentation c
      dequantised weights the packing holds.
    Published to HF, not Git. Done when unpacking the shards in Python reproduces the
    rounded weights bit for bit.
-2. **Kernels with unit tests** (WGSL + JavaScript, `inference/web/`): quantised matrix
+2. **Kernels with unit tests** (WGSL + JavaScript, `web/`): quantised matrix
    product with fused epilogues (bias, GELU, residual add) for M = 729, 730, 288 and the
    small read-out sizes; LayerNorm; bidirectional attention with online softmax (head
    dims 72 and 64, keys up to 1,018, prefix cache); partial rotary embedding; adapter

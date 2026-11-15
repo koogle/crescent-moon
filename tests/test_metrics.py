@@ -1,7 +1,7 @@
 import pytest
 
-from parallel_detection.boxes import iou_matrix, match
-from parallel_detection.metrics import agreement, summarize, unit_confidence_ap
+from crescent_moon.boxes import iou_matrix, match
+from crescent_moon.metrics import agreement, summarize, unit_confidence_ap
 
 
 def record(kind, truth, predicted, exhaustive=True, image_id=1, seconds=0.1):
@@ -102,7 +102,7 @@ def test_agreement_pairs_boxes_in_emitted_order():
 
 
 def test_ranked_ap_orders_boxes_by_confidence():
-    from parallel_detection.metrics import ranked_ap
+    from crescent_moon.metrics import ranked_ap
 
     box, far, miss = [0, 0, 100, 100], [500, 500, 520, 520], [300, 300, 310, 310]
     good = record("present", [box, far], [miss, box, far]) | {"scores": [0.2, 0.9, 0.8]}
@@ -117,7 +117,7 @@ def test_ranked_ap_orders_boxes_by_confidence():
 
 
 def test_best_threshold_picks_the_cut_with_the_highest_f1():
-    from parallel_detection.metrics import best_threshold
+    from crescent_moon.metrics import best_threshold
 
     box, far, miss = [0, 0, 100, 100], [500, 500, 520, 520], [300, 300, 310, 310]
     good = record("present", [box, far], [box, far, miss]) | {"scores": [0.9, 0.6, 0.3]}

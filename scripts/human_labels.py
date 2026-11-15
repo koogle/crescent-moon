@@ -20,7 +20,7 @@ same images. The most frequent unmapped categories are printed for checking the 
   of the classes verified present in an image, so classes never verified can be
   missing.
 - coco: COCO's own boxes from the `detection-datasets/coco` Parquet shards that
-  `parallel_detection.images` prepared the images from (the `--images-config` source).
+  `crescent_moon.images` prepared the images from (the `--images-config` source).
 """
 
 import argparse
@@ -31,7 +31,7 @@ from pathlib import Path
 import pyarrow.parquet as pq
 from huggingface_hub import hf_hub_download
 
-from parallel_detection.tasks import COCO_NAMES
+from crescent_moon.tasks import COCO_NAMES
 
 O365_REPO, O365_REVISION = "jxu124/objects365", "b9ce8d3596a3642fb909226750017d75dbc669a5"
 OPENIMAGES_REPO = "vikhyatk/openimages-bbox"

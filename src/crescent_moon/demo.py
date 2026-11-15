@@ -8,7 +8,7 @@ import time
 
 from PIL import Image, ImageDraw
 
-from parallel_detection.tasks import COCO_NAMES
+from crescent_moon.tasks import COCO_NAMES
 
 # Colour per category: a fixed hue order cycled by a stable hash of the name.
 PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
@@ -86,7 +86,7 @@ def stream_video(data, detect, every, max_frames, chunk_seconds=2.0, track=False
     import imageio_ffmpeg
 
     # Imported here: the web page uses this module without the tracker's dependencies.
-    from parallel_detection.tracking import Tracker
+    from crescent_moon.tracking import Tracker
 
     with tempfile.NamedTemporaryFile(suffix=".mp4") as clip:
         clip.write(data)

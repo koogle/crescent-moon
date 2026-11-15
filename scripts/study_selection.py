@@ -25,10 +25,10 @@ from pathlib import Path
 
 import numpy as np
 
-from parallel_detection.boxes import match
-from parallel_detection.merge import cells, select
-from parallel_detection.metrics import best_threshold, ranked_ap, summarize
-from parallel_detection.run import above, read_records
+from crescent_moon.boxes import match
+from crescent_moon.merge import cells, select
+from crescent_moon.metrics import best_threshold, ranked_ap, summarize
+from crescent_moon.run import above, read_records
 
 CELL_BINS = (("under 1 cell", 0, 1), ("1 to 4 cells", 1, 4), ("4 cells and over", 4, 1e9))
 
@@ -45,7 +45,7 @@ def load(path):
 
 def image_sizes(configs, folder):
     """(dataset, image id) -> (width, height), from the evaluation configs' samples."""
-    from parallel_detection.run import build_samples
+    from crescent_moon.run import build_samples
 
     sizes = {}
     for path in configs:

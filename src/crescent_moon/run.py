@@ -1,7 +1,7 @@
 """Run a detector over the configured tasks and write predictions and a summary.
 
-    python -m parallel_detection.run evaluate --config configs/moondream2.json --out artifacts/RUN
-    python -m parallel_detection.run score --predictions artifacts/RUN/predictions.jsonl
+    python -m crescent_moon.run evaluate --config configs/moondream2.json --out artifacts/RUN
+    python -m crescent_moon.run score --predictions artifacts/RUN/predictions.jsonl
 
 A detector is any object with `detect(image, phrases)` returning per-phrase pixel
 boxes, the seconds spent once per image and the seconds spent per phrase. A model
@@ -16,8 +16,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from parallel_detection.metrics import summarize
-from parallel_detection.tasks import (
+from crescent_moon.metrics import summarize
+from crescent_moon.tasks import (
     coco_samples,
     lvis_samples,
     mot_samples,
@@ -226,15 +226,15 @@ def make_detector(model, device, **extra):
     model = dict(model)
     adapter = model.pop("adapter")
     if adapter == "transformers":
-        from parallel_detection.moondream import MoondreamDetector
+        from crescent_moon.moondream import MoondreamDetector
 
         return MoondreamDetector(**model, device=device, **extra)
     if adapter == "photon":
-        from parallel_detection.photon import PhotonDetector
+        from crescent_moon.photon import PhotonDetector
 
         return PhotonDetector(**model, device=device)
     if adapter == "slots":
-        from parallel_detection.train_slots import SlotDetector
+        from crescent_moon.train_slots import SlotDetector
 
         return SlotDetector(**model, device=device)
     raise ValueError(f"Unknown adapter {adapter!r}")

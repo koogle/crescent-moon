@@ -3,7 +3,7 @@ import json
 import torch
 from torch import nn
 
-from parallel_detection.slots import (
+from crescent_moon.slots import (
     BINS,
     SlotHead,
     bins_of,
@@ -16,7 +16,7 @@ from parallel_detection.slots import (
     set_loss,
     total,
 )
-from parallel_detection.train_slots import decode_names, kept_objects, teacher_items
+from crescent_moon.train_slots import decode_names, kept_objects, teacher_items
 
 DIM, VOCABULARY = 64, 50
 
@@ -238,8 +238,8 @@ def test_prompted_batches_cache_and_heldout_scores(tmp_path):
 
     import numpy as np
 
-    from parallel_detection.tasks import COCO_NAMES
-    from parallel_detection.train_slots import (
+    from crescent_moon.tasks import COCO_NAMES
+    from crescent_moon.train_slots import (
         Features,
         batch_prompts,
         heldout_scores,
@@ -308,7 +308,7 @@ def test_set_loss_without_any_object_is_finite():
 
 
 def test_tile_records_clip_objects_and_filter_at_tile_scale():
-    from parallel_detection.train_slots import tile_records
+    from crescent_moon.train_slots import tile_records
 
     settings = {"tiles": 2, "overlap": 0.0, "min_inside": 0.5}
     config = {"min_area": 0.001, "max_objects": 30}

@@ -1,4 +1,4 @@
-from parallel_detection.merge import cells, select
+from crescent_moon.merge import cells, select
 
 
 def candidate(box, label, score, view="full", cut=False):

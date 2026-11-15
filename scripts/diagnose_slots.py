@@ -23,9 +23,9 @@ from collections import Counter, defaultdict
 
 import numpy as np
 
-from parallel_detection.boxes import iou_matrix
-from parallel_detection.metrics import areas, ranked_ap, ranked_curve, size_class
-from parallel_detection.run import read_records
+from crescent_moon.boxes import iou_matrix
+from crescent_moon.metrics import areas, ranked_ap, ranked_curve, size_class
+from crescent_moon.run import read_records
 
 SCORES = {
     "objectness": lambda s: s["objectness"],

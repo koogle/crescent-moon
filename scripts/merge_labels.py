@@ -15,7 +15,7 @@ import argparse
 import json
 from pathlib import Path
 
-from parallel_detection.merge import add_unmatched
+from crescent_moon.merge import add_unmatched
 
 
 def read(path):

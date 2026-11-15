@@ -25,9 +25,9 @@ from pathlib import Path
 
 import numpy as np
 
-from parallel_detection.boxes import match
-from parallel_detection.run import read_records
-from parallel_detection.tasks import MOT_PERSON_CLASSES
+from crescent_moon.boxes import match
+from crescent_moon.run import read_records
+from crescent_moon.tasks import MOT_PERSON_CLASSES
 
 
 def track_ids(dataset):

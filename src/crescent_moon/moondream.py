@@ -51,7 +51,7 @@ class MoondreamDetector:
         if decoder == "compiled":
             self.inner.compile()
         if decoder == "kernel":
-            from parallel_detection.kernel import KernelDecoder, build
+            from crescent_moon.kernel import KernelDecoder, build
 
             self.kernel = KernelDecoder(self.inner.text, build(kernel_library))
 

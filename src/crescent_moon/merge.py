@@ -22,7 +22,7 @@ touches a tile edge that is not an image edge, so the object may be cut off).
 
 import numpy as np
 
-from parallel_detection.boxes import iou_matrix
+from crescent_moon.boxes import iou_matrix
 
 GRID = 27
 

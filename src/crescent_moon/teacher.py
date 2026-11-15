@@ -1,8 +1,8 @@
 """Box labels from vision-language models through OpenRouter, and their consensus.
 
-    python -m parallel_detection.teacher label --config configs/teacher-pilot.json \
+    python -m crescent_moon.teacher label --config configs/teacher-pilot.json \
         --out artifacts/teacher-pilot --budget-usd 25
-    python -m parallel_detection.teacher score --out artifacts/teacher-pilot
+    python -m crescent_moon.teacher score --out artifacts/teacher-pilot
 
 The config names the images (`datasets`, `seed` and an optional `limit` on the first
 samples) and maps each OpenRouter model id to extra request fields.
@@ -41,11 +41,11 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from parallel_detection.boxes import iou_matrix
-from parallel_detection.merge import add_unmatched, tile_grid
-from parallel_detection.metrics import summarize
-from parallel_detection.run import build_samples, fetch_image
-from parallel_detection.tasks import COCO_NAMES
+from crescent_moon.boxes import iou_matrix
+from crescent_moon.merge import add_unmatched, tile_grid
+from crescent_moon.metrics import summarize
+from crescent_moon.run import build_samples, fetch_image
+from crescent_moon.tasks import COCO_NAMES
 
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 PROMPT = (
@@ -123,7 +123,7 @@ def request(model, image_bytes, settings, key):
 
 def images_of(config, out):
     """(samples, image folder): the evaluation tasks of `datasets`, or the unlabelled
-    images of a `manifest` written by `parallel_detection.images`."""
+    images of a `manifest` written by `crescent_moon.images`."""
     if "manifest" in config:
         manifest = Path(config["manifest"])
         lines = [json.loads(line) for line in manifest.read_text().splitlines()]

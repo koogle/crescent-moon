@@ -1,16 +1,42 @@
-# Detection
+# Crescent Moon
 
-Post-training a small vision-language model so that it detects requested objects in
-one forward pass, with a box and a short label per detection.
+**Fast object detection from a small vision-language model via slots.**
 
-**Status:** the evaluation harness, three baselines, custom decode kernels and six
-training runs of the slot head are implemented and measured. The best slot head beats
-Moondream 2's own detector on COCO F1 at a quarter of the latency, runs 2.8 times faster
-than Moondream 3.1 on the same GPU, and trails 3.1 by 6 points of F1, all in recall.
+Small vision-language models (VLMs) detect objects by decoding coordinates one token at
+a time, with one prompt per category, so latency grows with both the number of
+categories and the number of objects. We post-train a *frozen* 1.9B-parameter
+Moondream 2 with slot heads appended after the image tokens. They are filled in a single
+forward pass and read through the model's own coordinate, size and vocabulary heads.
 
-Measured outputs (predictions, summaries, training curves, the trained head) are in the
-Hugging Face dataset [`jfrick/lm-exploration-results`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-167/post-training/detection)
-under `pr-167/post-training/detection/<run id>/`.
+On 500 COCO val2017 images the head reaches F1 0.707 at IoU 0.5 in 0.09 s per image
+(Moondream 3.1, 9B: 0.700 in 0.21 s), and 0.718 when it also reads a 2×2 grid of tiles,
+which brings its recall of objects smaller than one feature-grid cell to Moondream's
+level. On Pascal VOC 2007, which none of the models was tuned on, it scores F1 0.858
+against Moondream 3.1's 0.857. With all 80 categories requested it needs about 59× less
+time per image, which makes continuous detection on streamed video practical. An
+auxiliary masked-diffusion denoising loss, category prompts, size-weighted losses and
+teacher-only labels do not help; we report what did and did not work.
+
+- **Demo** (Gradio on Modal: image comparison, streamed video, live camera):
+  <https://radiantai--crescent-moon-demo-web.modal.run>. The app stops itself within 24
+  hours of each deploy; `.venv/bin/python demo_app.py` brings it back ([Demo](#demo)).
+- **Paper**: [`paper/main.tex`](paper/main.tex), two pages; editable copy as a
+  [Claude Doc](https://claude.ai/artifact/SWvyTurEodiG2uWnKKQaWc).
+- **Weights**: the three demo heads in the HF model repository
+  [`jfrick/crescent-moon`](https://huggingface.co/jfrick/crescent-moon); every trained
+  head on the Modal volume `lm-exploration-parallel-detection` under `slots/<run id>/`.
+- **Measured outputs** (predictions, summaries, training curves, head snapshots,
+  selection studies, figures): HF dataset
+  [`jfrick/lm-exploration-results`](https://huggingface.co/datasets/jfrick/lm-exploration-results/tree/main/pr-167/post-training/detection),
+  folder `pr-167/post-training/detection/<run id>/`.
+- **On-device plan**: [`docs/webgpu.md`](docs/webgpu.md), the slot detector in a phone's
+  browser on hand-written WebGPU kernels.
+
+**Status:** the evaluation harness, three baselines, custom decode kernels and the
+training runs of the slot head are implemented and measured; the sections below hold
+every table, negative results included. The history up to November 2026 was written in
+[`koogle/lm-exploration`](https://github.com/koogle/lm-exploration) under
+`post-training/detection/` and moved here with its commits.
 
 ## Question
 
@@ -35,7 +61,7 @@ Moondream 3.1 is the most recent release; its repository holds weights only and
 [Photon](https://docs.moondream.ai/running-locally) (`pip install moondream`) is the
 published way to run it. Photon also serves Moondream 2. Photon's `kestrel-kernels`
 package states a proprietary licence that grants use under a separate agreement, while
-Moondream's documentation describes local inference as free; this folder only calls
+Moondream's documentation describes local inference as free; this repository only calls
 the engine through its public client and does not inspect it.
 
 Moondream 2's `detect(image, phrase)` takes one phrase per call. The image is encoded
@@ -45,7 +71,7 @@ carry no confidence.
 
 ## Evaluation protocol
 
-Every task has the same layout (`src/parallel_detection/tasks.py`): an image and a
+Every task has the same layout (`src/crescent_moon/tasks.py`): an image and a
 list of phrases, each with its truth boxes. Only categories present in the image are
 prompted.
 
@@ -55,7 +81,7 @@ prompted.
 | RefCOCO-M val | Every expression of every referred object | `moondream/refcoco-m`, Moondream's re-annotated RefCOCO |
 | LVIS v1 minival | Every annotated category | `GLIPModel/GLIP` annotation file; COCO images |
 
-Scores (`src/parallel_detection/metrics.py`), at IoU 0.5 and 0.75:
+Scores (`src/crescent_moon/metrics.py`), at IoU 0.5 and 0.75:
 
 - Micro precision, recall and F1 with the largest one-to-one matching per phrase. For
   categories LVIS marks as not exhaustively annotated, unmatched boxes are not errors.
@@ -128,7 +154,7 @@ for 53% of 249 absent categories.
 
 ## Custom decode kernels
 
-`src/parallel_detection/decode_step.cu` runs one batch-one decoder step of Moondream 2
+`src/crescent_moon/decode_step.cu` runs one batch-one decoder step of Moondream 2
 as three fused CUDA launches per layer: layer norm with the qkv and fc1 rows, attention
 with rotary embedding and key/value append, and the proj and fc2 rows added to the
 residual stream. It reads the model's BF16 weights in place and computes in FP32 with
@@ -154,7 +180,7 @@ been timed on that GPU. Image encoding and prompt prefill stay in PyTorch.
 
 ## Slot head: one pass, masked diffusion over boxes and labels
 
-`src/parallel_detection/slots.py`. After the 730-position image prefix, the decoder
+`src/crescent_moon/slots.py`. After the 730-position image prefix, the decoder
 reads a block of six positions per slot in a single forward pass. Slot positions see
 the image and each other. Every position starts as a mask and is read through the
 model's own frozen heads:
@@ -166,7 +192,7 @@ model's own frozen heads:
 - the first position also gives an objectness logit (the slot may be "nothing").
 
 One pass with everything masked is the one-step sampler, the mechanism of the
-[DFlash-style drafter](../../exploration/latent-workspace/docs/implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md).
+[DFlash-style drafter](https://github.com/koogle/lm-exploration/blob/main/exploration/latent-workspace/docs/implementing-a-diffusion-style-drafter-from-scratch-and-learnings.md).
 Further passes reveal the most confident positions and predict the rest again.
 
 The backbone is frozen. Rank-16 adapters act only at slot positions, so the image
@@ -262,7 +288,7 @@ objectness threshold chosen on its held-out images; L40S:
   as real unlabelled objects.
 
 These evaluations ran at threshold 0.3 with each box's confidence recorded, and are
-rescored at other thresholds with `python -m parallel_detection.run score --min-score`.
+rescored at other thresholds with `python -m crescent_moon.run score --min-score`.
 
 ### Training on Gemini 4 Carbon labels
 
@@ -368,7 +394,7 @@ precision for recall at the tuned threshold, and with the Gemini-labelled images
 loses slightly on every measure.
 
 The 21,187 labelled images are in the private Hugging Face dataset
-[`jfrick/coco80-teacher-labels-gemini-4-carbon`](https://huggingface.co/datasets/jfrick/coco80-teacher-labels-gemini-4-carbon),
+[`jfrick/crescent-moon-teacher-labels-gemini-4-carbon`](https://huggingface.co/datasets/jfrick/crescent-moon-teacher-labels-gemini-4-carbon),
 written by `scripts/export_teacher_dataset.py`.
 
 `slots-teacher-23k` was preempted at step 7,000 and resumed from its checkpoint.
@@ -399,7 +425,7 @@ The first 18k teacher-labelled images added 1.7 points of F1 (0.657 to 0.673, be
 re-scoring); a less complete labeller adds nothing or less.
 
 The Argon-labelled images are in the private Hugging Face dataset
-[`jfrick/coco80-teacher-labels-gemini-4-argon`](https://huggingface.co/datasets/jfrick/coco80-teacher-labels-gemini-4-argon),
+[`jfrick/crescent-moon-teacher-labels-gemini-4-argon`](https://huggingface.co/datasets/jfrick/crescent-moon-teacher-labels-gemini-4-argon),
 none of them in the Carbon dataset.
 
 #### Why the Argon labels did not help
@@ -753,7 +779,7 @@ the archive under `figures/`.
 ## Teacher labels from other models
 
 COCO's human labels miss objects, and a slot that finds an unlabelled one is trained as
-wrong. `src/parallel_detection/teacher.py` asks vision-language models on OpenRouter for
+wrong. `src/crescent_moon/teacher.py` asks vision-language models on OpenRouter for
 every instance of the 80 COCO categories (Gemini-style `box_2d`, 0 to 1000), records each
 reply with its cost, stops at a dollar budget, and scores each model and multi-model
 consensus against COCO's labels with the evaluation harness.
@@ -793,7 +819,7 @@ an unlabelled object counts as a false positive:
 
 The training images are 30,000 from Open Images (`vikhyatk/openimages-bbox`, 30 seeded
 shards) and 20,000 from Objects365 (`guozonghao96/objects365`, every tenth image of five
-patches), prepared by `src/parallel_detection/images.py` with `configs/teacher-images.json`.
+patches), prepared by `src/crescent_moon/images.py` with `configs/teacher-images.json`.
 
 ## Demo
 
@@ -837,7 +863,7 @@ from `paper/`. The built PDF is in the archive as `paper/one-pass-detection.pdf`
 
 ## Run
 
-From `post-training/detection/`:
+From the repository root:
 
 ```sh
 uv venv --python 3.12
@@ -857,7 +883,7 @@ uv pip install -e ".[dev,modal]"
 .venv/bin/python demo_app.py
 
 # Recompute scores from saved predictions.
-.venv/bin/python -m parallel_detection.run score \
+.venv/bin/python -m crescent_moon.run score \
   --predictions artifacts/moondream2-001/predictions.jsonl
 ```
 
@@ -866,8 +892,8 @@ id>/`, `slots/<run id>/`) and the launching command saves the summary under
 `artifacts/<run id>/`. A local run needs the `model` extra and a GPU.
 
 Every Modal call has `retries=0`. Evaluations stop within one hour of launch and
-training within eight; a separate CPU supervisor, built on
-`training/workflows/deadline.py`, cancels a call still queued or running at its
+training within eight; a separate CPU supervisor
+(`src/crescent_moon/deadline.py`) cancels a call still queued or running at its
 deadline. A preempted evaluation continues from the images it recorded, and preempted
 training from its last held-out evaluation.
 

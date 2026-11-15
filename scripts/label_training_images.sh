@@ -1,14 +1,14 @@
 #!/bin/sh
 # Label prepared training images with the teacher until both quotas are met or the
 # budget is spent; re-runs `label` as preparation adds images (it skips labelled ones).
-# Run from post-training/detection/:
+# Run from the repository root:
 #   sh scripts/label_training_images.sh CONFIG OUT BUDGET_USD
 set -u
 config=$1
 out=$2
 budget=$3
 while :; do
-    .venv/bin/python -m parallel_detection.teacher label --config "$config" \
+    .venv/bin/python -m crescent_moon.teacher label --config "$config" \
         --out "$out" --budget-usd "$budget"
     done=$(CONFIG="$config" OUT="$out" .venv/bin/python - <<'PY'
 import json

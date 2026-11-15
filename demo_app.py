@@ -1,6 +1,6 @@
 """Detection demo on Modal: compare detectors on images and run one on a video.
 
-Run from post-training/detection/:
+Run from the repository root:
 
     .venv/bin/python demo_app.py        # deploy, then arm the shutdown 24 hours later
 
@@ -25,7 +25,7 @@ from pathlib import Path
 import modal
 
 HERE = Path(__file__).parent if modal.is_local() else Path("/root")
-APP = "lm-exploration-detection-demo"
+APP = "crescent-moon-demo"
 CONFIG = json.loads((HERE / "configs" / "demo.json").read_text())
 LIFETIME_SECONDS = 24 * 60 * 60 - 900
 CALL_SECONDS = 30 * 60
@@ -36,14 +36,14 @@ CAMERA_PAGE = HERE / "demo_camera.html"
 
 app = modal.App(APP)
 volume = modal.Volume.from_name("lm-exploration-parallel-detection")
-PACKAGE = HERE / "src" / "parallel_detection" if modal.is_local() else HERE / "parallel_detection"
+PACKAGE = HERE / "src" / "crescent_moon" if modal.is_local() else HERE / "crescent_moon"
 
 
 def with_source(image):
     return (
         image.env({"HF_HOME": "/runs/hf-cache"})
         .add_local_file(HERE / "configs" / "demo.json", "/root/configs/demo.json")
-        .add_local_dir(PACKAGE, "/root/parallel_detection")
+        .add_local_dir(PACKAGE, "/root/crescent_moon")
     )
 
 
@@ -88,7 +88,7 @@ web_image = with_source(
 
 
 def found_in(result, phrases):
-    from parallel_detection.demo import detections
+    from crescent_moon.demo import detections
 
     return detections(result, phrases)
 
@@ -105,8 +105,8 @@ def found_in(result, phrases):
 class Detectors:
     @modal.enter()
     def load(self):
-        from parallel_detection.moondream import MoondreamDetector
-        from parallel_detection.train_slots import SlotDetector, load_backbone
+        from crescent_moon.moondream import MoondreamDetector
+        from crescent_moon.train_slots import SlotDetector, load_backbone
 
         moondream = CONFIG["moondream"]
         backbone = load_backbone(moondream["repo"], moondream["revision"], device="cuda")
@@ -125,7 +125,7 @@ class Detectors:
             )
 
     def _detect(self, name, image, phrases):
-        from parallel_detection.tasks import COCO_NAMES
+        from crescent_moon.tasks import COCO_NAMES
 
         if name != "Moondream 2 detect":
             phrases = [p for p in phrases if p in COCO_NAMES]  # the heads know these only
@@ -158,7 +158,7 @@ class Detectors:
     @modal.method()
     def video(self, data, name, phrases, every, max_frames, track=False):
         """Annotated video chunks and statistics, as they are produced."""
-        from parallel_detection.demo import stream_video
+        from crescent_moon.demo import stream_video
 
         yield from stream_video(
             data,
@@ -181,7 +181,7 @@ class Detectors:
 class Photon:
     @modal.enter()
     def load(self):
-        from parallel_detection.photon import PhotonDetector
+        from crescent_moon.photon import PhotonDetector
 
         self.detector = PhotonDetector(CONFIG["photon_model"], 150, "cuda")
 
@@ -211,7 +211,7 @@ class Photon:
     @modal.method()
     def video(self, data, phrases, every, max_frames, track=False):
         """Annotated video chunks and statistics, as they are produced."""
-        from parallel_detection.demo import stream_video
+        from crescent_moon.demo import stream_video
 
         yield from stream_video(
             data, lambda image: self._detect(image, phrases)[0], every, max_frames, track=track
@@ -232,7 +232,7 @@ def web():
     from fastapi.concurrency import run_in_threadpool
     from fastapi.responses import HTMLResponse
 
-    from parallel_detection.demo import draw, phrases_of
+    from crescent_moon.demo import draw, phrases_of
 
     names = ["Moondream 2 detect", *CONFIG["slot_heads"], MOONDREAM_31]
     examples = [str(Path("/runs") / path) for path in CONFIG["examples"]]
@@ -296,8 +296,8 @@ def web():
     async def camera_frame(request: Request):
         """Detections on one webcam frame (JPEG body), in the frame's pixels; with
         `track`, through this session's tracker."""
-        from parallel_detection.demo import colour
-        from parallel_detection.tracking import Tracker
+        from crescent_moon.demo import colour
+        from crescent_moon.tracking import Tracker
 
         query = request.query_params
         name, session = query.get("model", ""), query.get("session", "")

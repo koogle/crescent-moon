@@ -14,7 +14,7 @@ import itertools
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from parallel_detection.boxes import iou_matrix
+from crescent_moon.boxes import iou_matrix
 
 
 class Tracker:
