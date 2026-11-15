@@ -128,6 +128,28 @@ image positions in the prefix, which means training a head for it) or cheaper ar
 With these kernels the pass matches the PyTorch reference on the L4 on all three images
 (36 of 36 checks; run `web-bench-final-l4`).
 
+Tried on attention after that, each measured on the L4 and none faster than the 0.80 s
+above: straight-line code over named vec4s instead of local arrays (0.79 s with 2 query
+rows, 0.96 with 4, 0.88 with 1), keys and values regrouped by head so that a head reads
+them contiguously (0.82 s; the regrouping itself takes 2 ms), and a loop without the
+rescaling branch (0.80 s). Attention is bound by arithmetic, not by memory layout or the
+branch.
+
+**Pooled image prefix.** A head's `prefix_pool` averages the 27 x 27 grid of image
+embeddings over 2 x 2 cells before the decoder (196 image positions instead of 729); the
+runtime does it with the `pool-grid` kernel and reads the prefix length from the
+manifest. Timed with the current head's weights exported under `prefix_pool` 2 (run
+`web-bench-pool2-l4`; that head was not trained for it, so this measures speed only):
+
+| Prefix | Vision | Decoder | Total |
+|---|---|---|---|
+| 729 image positions | 0.166 | 0.600 | 0.801 |
+| 196 image positions | 0.172 | 0.303 | 0.510 |
+
+Against PyTorch with the same pooling, on one image, 11 of 12 checks pass; the twelfth
+finds 191 of 192 box bins identical. `slots-teacher-coco-rank64-w4-crops1-pool2` trains a
+head on the pooled prefix; its accuracy is not measured yet.
+
 ## Not done yet
 
 - The 500-image COCO comparison of milestone 3 (browser F1 within 0.005 of PyTorch at the
