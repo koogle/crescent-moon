@@ -14,6 +14,9 @@
   input[type=text], select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; min-width: 220px; }
   button { font: inherit; padding: 7px 18px; border: 0; border-radius: 6px; background: var(--accent); color: white; cursor: pointer; }
   button.stop { background: #e34948; }
+  button:disabled { background: #b9b8b1; cursor: default; }
+  progress { width: 240px; height: 14px; }
+  #downloadText { color: var(--muted); align-self: center; }
   .stage { position: relative; display: inline-block; background: #000; border-radius: 6px; overflow: hidden; line-height: 0; }
   video { display: block; max-width: 100%; max-height: 72vh; width: auto; height: auto; min-width: 320px; min-height: 240px; }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -30,6 +33,11 @@
   <label class="inline" id="trackField"><input id="track" type="checkbox" checked>&nbsp;Track across frames</label>
   <label class="inline" id="deviceSwitch" hidden><input id="device" type="checkbox">&nbsp;<span id="deviceText">Run on this device (WebGPU)</span></label>
   <button id="toggle">Start camera</button>
+</div>
+<div class="controls" id="deviceStep" hidden>
+  <button id="download">Download the detector (1.2 GB)</button>
+  <progress id="progress" value="0" max="1" hidden></progress>
+  <span id="downloadText"></span>
 </div>
 <div class="stage"><video id="video" muted playsinline autoplay></video><canvas id="overlay"></canvas></div>
 <div id="status">The camera plays live; boxes from the last detected frame are drawn over it.</div>
@@ -67,38 +75,61 @@ fetch("camera/config").then((r) => r.json()).then((c) => {
   if (onDevice) {
     $("device").checked = true;
     $("modelField").hidden = true; $("trackField").hidden = true;
-    status.textContent = `Runs the 4-bit detector (${c.device.export}) in this browser on WebGPU. `
-      + "Start camera downloads its weights once, about 1.2 GB, and the browser keeps them.";
+    status.textContent = `Runs the 4-bit detector (${c.device.export}) in this browser on WebGPU: `
+      + "first download the detector, then start the camera.";
+    showDeviceStep();
   }
 });
+
+// The download is its own step: the button fetches the weights (the browser keeps them),
+// and the camera starts on this device only once the detector is loaded.
+async function showDeviceStep() {
+  const on = $("device").checked;
+  $("deviceStep").hidden = !on;
+  toggle.disabled = on && !local;
+  if (!on || local || loadingLocal) return;
+  const kept = "caches" in window && (await (await caches.open("crescent-moon-weights")).keys()).length > 0;
+  $("download").textContent = kept ? "Load the detector (already downloaded)" : "Download the detector (1.2 GB)";
+  $("downloadText").textContent = kept ? "" : "One download; the browser keeps it for next time.";
+}
+$("download").addEventListener("click", loadLocal);
 
 $("device").addEventListener("change", () => {
   const on = $("device").checked;
   $("model").disabled = on; $("track").disabled = on;
   boxes = [];
-  if (on) loadLocal();
+  if (on && running && !local) stop("Stopped; download the detector, then start the camera.");
+  showDeviceStep();
 });
 
 // Downloads the weights once (the browser keeps them) and builds the WebGPU pipelines.
 function loadLocal() {
   loadingLocal ??= (async () => {
     const megabytes = (bytes) => (bytes / 2 ** 20).toFixed(0);
+    $("download").disabled = true; $("progress").hidden = false;
+    $("progress").value = 0; $("downloadText").textContent = "Starting the download";
     const [runtime, selection] = await Promise.all([import("./web/model.js"), import("./web/select.js")]);
     const model = await runtime.loadModel(new URL(config.device.weights, location.href), (done, total) => {
-      status.textContent = `Loading the detector into this device: ${megabytes(done)} of ${megabytes(total)} MB`;
+      $("progress").value = done / total;
+      $("downloadText").textContent = `${megabytes(done)} of ${megabytes(total)} MB`;
     });
+    $("downloadText").textContent = "Preparing the detector on the GPU";
     model.device.lost.then((info) => {
-      local = null; loadingLocal = null;
-      if (onDevice) { stop(`The browser's GPU device was lost (${info.message || info.reason}).`); return; }
+      local = null; loadingLocal = null; $("download").disabled = false; $("progress").hidden = true; $("downloadText").textContent = "";
+      if (onDevice) { stop(`The browser's GPU device was lost (${info.message || info.reason}).`); showDeviceStep(); return; }
       $("device").checked = false; $("model").disabled = false; $("track").disabled = false;
+      showDeviceStep();
       status.textContent = `The browser's GPU device was lost (${info.message || info.reason}); back on the server.`;
     });
     local = { model, patches: runtime.patches, side: runtime.CROP, ...selection };
-    status.textContent = "The detector is loaded on this device.";
+    $("progress").hidden = true; $("download").textContent = "Detector ready";
+    $("downloadText").textContent = ""; toggle.disabled = false;
+    status.textContent = "The detector is loaded on this device; start the camera.";
   })().catch((error) => {
-    loadingLocal = null;
-    if (onDevice) { stop(`Could not run on this device: ${error.message}`); return; }
+    loadingLocal = null; $("download").disabled = false; $("progress").hidden = true; $("downloadText").textContent = "";
+    if (onDevice) { stop(`Could not run on this device: ${error.message}`); showDeviceStep(); return; }
     $("device").checked = false; $("model").disabled = false; $("track").disabled = false;
+    showDeviceStep();
     status.textContent = `Could not run on this device: ${error.message}`;
   });
   return loadingLocal;
@@ -203,7 +234,7 @@ async function detectLoop() {
     const w = video.videoWidth, h = video.videoHeight;
     if (!w) { await new Promise((r) => setTimeout(r, 100)); continue; }
     if ($("device").checked) {
-      if (!local) { await loadLocal(); continue; }
+      if (!local) { stop("Download the detector, then start the camera."); return; }
       await detectLocal(w, h);
       // Let the page paint and take input between frames.
       await new Promise((r) => setTimeout(r, 0));
