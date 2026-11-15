@@ -7,7 +7,8 @@
 // u32 fields, listed in FIELDS under the kernel's name in the order the shader declares them.
 
 const GROUP = 32; // weights per scale
-const ROWS = 8; // token rows one invocation of the quantised product handles
+// The tile one invocation of the quantised product computes: outputs by token rows.
+const OUTS = 4, ROWS = 8;
 const FIELDS = {};
 
 const GELU = `
@@ -35,18 +36,15 @@ const WRITE4 = (value) => `
 
 export function quantisedLinear(bits) {
   // A word holds 32 / bits weights; they are decoded four at a time into a vec4 and
-  // multiplied with four columns of a row in one dot product.
+  // multiplied with four columns of a row in one dot product. One invocation computes a
+  // tile of OUTS outputs by ROWS rows, so each input vec4 is loaded once for OUTS outputs
+  // and each weight word is decoded once for ROWS rows.
   const perWord = 32 / bits, words = GROUP / perWord, quads = perWord / 4, shift = 32 - bits;
-  const decoded = [], sums = (rows) => {
-    const row = (r) => Array.from({ length: quads },
-      (_, q) => `dot(q${q}, x[${rows}.${r} + c + ${q}u])`).join(" + ");
-    return `vec4<f32>(${["x", "y", "z", "w"].map(row).join(",\n        ")})`;
-  };
-  for (let q = 0; q < quads; q++) {
-    const ups = [0, 1, 2, 3].map((j) => `${shift - bits * (4 * q + j)}u`).join(", ");
-    decoded.push(`      let q${q} = vec4<f32>(bitcast<vec4<i32>>(vec4<u32>(word) << vec4<u32>(${ups})) `
-      + `>> vec4<u32>(${shift}u));`);
-  }
+  const outs = [...Array(OUTS).keys()], fours = [...Array(ROWS / 4).keys()], qs = [...Array(quads).keys()];
+  const lines = (items, make) => items.map(make).join("\n");
+  const ups = (q) => [0, 1, 2, 3].map((j) => `${shift - bits * (4 * q + j)}u`).join(", ");
+  const sum = (i, h) => `vec4<f32>(${[0, 1, 2, 3].map((j) =>
+    qs.map((q) => `dot(d${i}_${q}, x${4 * h + j}_${q})`).join(" + ")).join(", ")})`;
   return `
 struct P { rows: u32, x_row0: u32, x_stride: u32, groups: u32,
            outs: u32, y_row0: u32, y_stride: u32, y_col0: u32,
@@ -58,52 +56,48 @@ struct P { rows: u32, x_row0: u32, x_stride: u32, groups: u32,
 @group(0) @binding(4) var<storage, read> b: array<f32>;
 @group(0) @binding(5) var<storage, read_write> y: array<f32>;
 ${GELU}
-fn put(row: u32, o: u32, value: f32) {
-  if (row >= p.rows) { return; }
-  let at = (p.y_row0 + row) * p.y_stride + p.y_col0 + o;
-  if ((p.flags & 1u) != 0u) { y[at] += value; } else { y[at] = value; }
+fn put(row: u32, o: u32, value: vec4<f32>) {
+  if (o >= p.outs) { return; }
+  let v = select(value, gelu(value), (p.flags & 2u) != 0u);
+  for (var k = 0u; k < 4u; k++) {
+    if (row + k < p.rows) {
+      let at = (p.y_row0 + row + k) * p.y_stride + p.y_col0 + o;
+      if ((p.flags & 1u) != 0u) { y[at] += v[k]; } else { y[at] = v[k]; }
+    }
+  }
 }
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-  let o = id.x + p.out0;
+  let o = id.x * ${OUTS}u + p.out0;
   let row = id.y * ${ROWS}u;
   if (o >= p.outs || row >= p.rows) { return; }
-  // Offsets, in vec4s, of the eight rows; rows past the end repeat the last and are not written.
-  let last = vec4<u32>(p.rows - 1u);
+  // Offsets, in vec4s, of the rows; rows and outputs past the end repeat the last and
+  // are not written.
+  let last = p.rows - 1u;
   let quarter = p.x_stride >> 2u;
-  let ra = (min(vec4<u32>(row, row + 1u, row + 2u, row + 3u), last) + p.x_row0) * quarter;
-  let rb = (min(vec4<u32>(row + 4u, row + 5u, row + 6u, row + 7u), last) + p.x_row0) * quarter;
-  var total_a = vec4<f32>(0.0);
-  var total_b = vec4<f32>(0.0);
-  var wi = o * p.groups * ${words}u;
+${lines([...Array(ROWS).keys()], (r) => `  let r${r} = (min(row + ${r}u, last) + p.x_row0) * quarter;`)}
+${lines(outs, (i) => `  let o${i} = min(o + ${i}u, p.outs - 1u);
+  var w${i} = o${i} * p.groups * ${words}u;
+${lines(fours, (h) => `  var t${i}_${h} = vec4<f32>(0.0);`)}`)}
   for (var g = 0u; g < p.groups; g++) {
-    var acc_a = vec4<f32>(0.0);
-    var acc_b = vec4<f32>(0.0);
+${lines(outs, (i) => lines(fours, (h) => `    var a${i}_${h} = vec4<f32>(0.0);`))}
     for (var k = 0u; k < ${words}u; k++) {
-      let word = w[wi];
-      wi++;
       let c = g * ${GROUP / 4}u + k * ${quads}u;
-${decoded.join("\n")}
-      acc_a += ${sums("ra")};
-      acc_b += ${sums("rb")};
+${lines([...Array(ROWS).keys()], (r) => lines(qs, (q) => `      let x${r}_${q} = x[r${r} + c + ${q}u];`))}
+${lines(outs, (i) => `      let word${i} = w[w${i} + k];
+${lines(qs, (q) => `      let d${i}_${q} = vec4<f32>(bitcast<vec4<i32>>(vec4<u32>(word${i}) << vec4<u32>(${ups(q)})) >> vec4<u32>(${shift}u));`)}
+${lines(fours, (h) => `      a${i}_${h} += ${sum(i, h)};`)}`)}
     }
-    let si = o * p.scale_stride + g;
-    let scale = unpack2x16float(s[si >> 1u])[si & 1u];
-    total_a += scale * acc_a;
-    total_b += scale * acc_b;
+${lines(outs, (i) => `    w${i} += ${words}u;
+    let s${i} = o${i} * p.scale_stride + g;
+    let scale${i} = unpack2x16float(s[s${i} >> 1u])[s${i} & 1u];
+${lines(fours, (h) => `    t${i}_${h} += scale${i} * a${i}_${h};`)}`)}
   }
-  total_a += b[o];
-  total_b += b[o];
-  if ((p.flags & 2u) != 0u) { total_a = gelu(total_a); total_b = gelu(total_b); }
-  for (var k = 0u; k < 4u; k++) {
-    put(row + k, o, total_a[k]);
-    put(row + 4u + k, o, total_b[k]);
-  }
+${lines(outs, (i) => lines(fours, (h) => `  put(row + ${4 * h}u, o + ${i}u, t${i}_${h} + b[o${i}]);`))}
 }`;
 }
 
 // y[row, o] = bias[o] + sum_g scale[o, g] * sum_j q[o, 32 g + j] * x[row, 32 g + j],
-// for eight rows per invocation so that each weight is decoded once for eight products.
 // x is read as vec4s: its row stride is a multiple of 4. flags: 1 adds to y, 2 applies GELU.
 FIELDS.quantisedLinear = ["rows", "x_row0", "x_stride", "groups", "outs", "y_row0", "y_stride",
   "y_col0", "scale_stride", "flags", "out0", "pad"];
@@ -325,7 +319,7 @@ export class Kernels {
     };
     return this.step(`quantised-linear-${bits}`, quantisedLinear(bits), FIELDS.quantisedLinear,
       values, [x, layer.weight, layer.scale, layer.bias, y],
-      [Math.ceil(layer.rows / 8), Math.ceil(Math.ceil(v.rows / ROWS) / 8)]);
+      [Math.ceil(Math.ceil(layer.rows / OUTS) / 8), Math.ceil(Math.ceil(v.rows / ROWS) / 8)]);
   }
 
   halfLinear(x, weight, y, v) {
