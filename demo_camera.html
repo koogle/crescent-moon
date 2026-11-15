@@ -27,6 +27,7 @@
   <label>Camera <select id="camera"><option value="">Default camera</option></select></label>
   <label>Model <select id="model"></select></label>
   <label class="inline"><input id="track" type="checkbox" checked>&nbsp;Track across frames</label>
+  <label class="inline" id="deviceSwitch" hidden><input id="device" type="checkbox">&nbsp;Run on this device (WebGPU)</label>
   <button id="toggle">Start camera</button>
 </div>
 <div class="stage"><video id="video" muted playsinline autoplay></video><canvas id="overlay"></canvas></div>
@@ -35,12 +36,74 @@
 const $ = (id) => document.getElementById(id);
 const video = $("video"), overlay = $("overlay"), status = $("status"), toggle = $("toggle");
 const grab = document.createElement("canvas");
+const grabCrop = document.createElement("canvas");
 let config = null, running = false, stream = null, boxes = [], scale = 1, session = null;
+// The detector in this browser, once loaded: { model, patches, side, candidates, select }.
+let local = null, loadingLocal = null;
+const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
 
 fetch("camera/config").then((r) => r.json()).then((c) => {
   config = c;
   for (const name of c.models) $("model").add(new Option(name, name, false, name === c.default));
+  // Offered when the server has an export for the browser and the browser has WebGPU.
+  $("deviceSwitch").hidden = !(c.device && navigator.gpu);
 });
+
+$("device").addEventListener("change", () => {
+  const on = $("device").checked;
+  $("model").disabled = on; $("track").disabled = on;
+  boxes = [];
+  if (on) loadLocal();
+});
+
+// Downloads the weights once (the browser keeps them) and builds the WebGPU pipelines.
+function loadLocal() {
+  loadingLocal ??= (async () => {
+    const megabytes = (bytes) => (bytes / 2 ** 20).toFixed(0);
+    const [runtime, selection] = await Promise.all([import("./web/model.js"), import("./web/select.js")]);
+    const model = await runtime.loadModel(new URL(config.device.weights, location.href), (done, total) => {
+      status.textContent = `Loading the detector into this device: ${megabytes(done)} of ${megabytes(total)} MB`;
+    });
+    model.device.lost.then((info) => {
+      local = null; loadingLocal = null; $("device").checked = false;
+      $("model").disabled = false; $("track").disabled = false;
+      status.textContent = `The browser's GPU device was lost (${info.message || info.reason}); back on the server.`;
+    });
+    local = { model, patches: runtime.patches, side: runtime.CROP, ...selection };
+    status.textContent = "The detector is loaded on this device.";
+  })().catch((error) => {
+    loadingLocal = null; $("device").checked = false;
+    $("model").disabled = false; $("track").disabled = false;
+    status.textContent = `Could not run on this device: ${error.message}`;
+  });
+  return loadingLocal;
+}
+
+function colourOf(label) {
+  let hash = 0;
+  for (const letter of label) hash = (hash * 31 + letter.codePointAt(0)) >>> 0;
+  return PALETTE[hash % PALETTE.length];
+}
+
+// One frame through the detector in this browser: the whole frame resized to the
+// model's square crop, one forward pass, selection; boxes in video pixels.
+async function detectLocal(w, h) {
+  const side = local.side, settings = local.model.manifest.selection;
+  grabCrop.width = grabCrop.height = side;
+  const pen = grabCrop.getContext("2d", { willReadFrequently: true });
+  pen.drawImage(video, 0, 0, side, side);
+  const started = performance.now();
+  const rows = local.patches(pen.getImageData(0, 0, side, side).data, 4);
+  const { slots, seconds } = await local.model.run(rows, { timed: true });
+  const asked = $("categories").value.split(",").map((p) => p.trim().toLowerCase()).filter(Boolean);
+  const found = local.select(local.candidates(slots, local.model.manifest.vocabulary, settings.box_power), w, h,
+    { threshold: settings.threshold, duplicateIou: settings.duplicate_iou, labels: asked.length ? asked : null });
+  const total = (performance.now() - started) / 1000;
+  boxes = found.map((b) => ({ ...b, colour: colourOf(b.label) })); scale = 1;
+  const stage = (name) => `${name} ${seconds[name].toFixed(3)} s`;
+  status.textContent = `On this device: ${boxes.length} boxes; ${total.toFixed(3)} s per frame (`
+    + `${stage("vision")}, ${stage("projection")}, ${stage("decoder")}, ${stage("readout")})`;
+}
 
 // Camera names are only shown once the page may use a camera, so the list is filled
 // again after each start and whenever a camera is plugged in or out.
@@ -114,6 +177,13 @@ async function detectLoop() {
     }
     const w = video.videoWidth, h = video.videoHeight;
     if (!w) { await new Promise((r) => setTimeout(r, 100)); continue; }
+    if ($("device").checked) {
+      if (!local) { await loadLocal(); continue; }
+      await detectLocal(w, h);
+      // Let the page paint and take input between frames.
+      await new Promise((r) => setTimeout(r, 0));
+      continue;
+    }
     const s = Math.min(1, config.side / Math.max(w, h));
     grab.width = Math.round(w * s); grab.height = Math.round(h * s);
     grab.getContext("2d").drawImage(video, 0, 0, grab.width, grab.height);

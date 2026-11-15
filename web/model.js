@@ -26,15 +26,22 @@ function halfToFloat(bytes, count) {
   return out;
 }
 
-// Fetches a shard, from the browser's cache when it is there.
-async function fetchShard(url, onBytes) {
+// Fetches a shard, from the browser's cache when it is there. `version` identifies the
+// shard's content: a cached copy of the same file with another version is replaced.
+async function fetchShard(url, version, onBytes) {
   const cache = "caches" in globalThis ? await caches.open("crescent-moon-weights") : null;
-  let response = cache && await cache.match(url);
+  const key = `${url}?v=${version}`;
+  let response = cache && await cache.match(key);
   if (!response) {
-    response = await fetch(url);
+    if (cache) {
+      for (const request of await cache.keys()) {
+        if (request.url.split("?")[0] === url) await cache.delete(request);
+      }
+    }
+    response = await fetch(key);
     if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
     if (cache) {
-      try { await cache.put(url, response.clone()); } catch { /* over quota: keep going uncached */ }
+      try { await cache.put(key, response.clone()); } catch { /* over quota: keep going uncached */ }
     }
   }
   const reader = response.body.getReader();
@@ -67,7 +74,8 @@ export async function loadWeights(device, base, manifest, progress = () => {}) {
   let loaded = 0;
   const tensors = {};
   for (let shard = 0; shard < manifest.shards.length; shard++) {
-    const bytes = await fetchShard(new URL(manifest.shards[shard], base).href, (n) => {
+    const version = places.find((p) => p.place.shard === shard).place.sha256.slice(0, 16);
+    const bytes = await fetchShard(new URL(manifest.shards[shard], base).href, version, (n) => {
       loaded += n;
       progress(loaded, total);
     });

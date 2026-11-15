@@ -33,6 +33,11 @@ CAMERA_SIDE = 640
 CAMERA_SECONDS = 10 * 60
 CAMERA_SESSIONS = 64
 CAMERA_PAGE = HERE / "demo_camera.html"
+# The browser runtime (`web/`) and, on the volume, the export it downloads
+# (`scripts/export_web.py`, uploaded to `web/<name>/`).
+WEB = HERE / "web"
+WEB_FILES = ("kernels.js", "model.js", "select.js")
+EXPORTS = Path("/runs/web")
 
 app = modal.App(APP)
 volume = modal.Volume.from_name("lm-exploration-parallel-detection")
@@ -85,6 +90,8 @@ web_image = with_source(
         "scipy==1.15.3",
     )
 ).add_local_file(CAMERA_PAGE, "/root/demo_camera.html")
+for name in WEB_FILES:
+    web_image = web_image.add_local_file(WEB / name, f"/root/web/{name}")
 
 
 def found_in(result, phrases):
@@ -230,7 +237,7 @@ def web():
     import gradio as gr
     from fastapi import FastAPI, HTTPException, Request
     from fastapi.concurrency import run_in_threadpool
-    from fastapi.responses import HTMLResponse
+    from fastapi.responses import FileResponse, HTMLResponse
 
     from crescent_moon.demo import draw, phrases_of
 
@@ -290,7 +297,35 @@ def web():
     @api.get("/camera/config")
     def camera_config():
         default = "Slots, rank 64, fast"
-        return {"models": names, "default": default, "side": CAMERA_SIDE, "seconds": CAMERA_SECONDS}
+        export = CONFIG["device_export"]
+        device = None
+        if (EXPORTS / export / "manifest.json").exists():
+            device = {"export": export, "weights": f"weights/{export}/"}
+        return {
+            "models": names,
+            "default": default,
+            "side": CAMERA_SIDE,
+            "seconds": CAMERA_SECONDS,
+            "device": device,
+        }
+
+    @api.get("/web/{name}")
+    def web_file(name: str):
+        """The browser runtime's modules, imported by the camera page."""
+        if name not in WEB_FILES:
+            raise HTTPException(404)
+        return FileResponse(WEB / name, media_type="text/javascript")
+
+    @api.get("/weights/{export}/{name}")
+    def weights_file(export: str, name: str):
+        """A manifest or weight shard of an export on the volume."""
+        path = EXPORTS / export / name
+        known = export == CONFIG["device_export"] and (
+            name == "manifest.json" or (name.startswith("weights-") and name.endswith(".bin"))
+        )
+        if not known or not path.exists():
+            raise HTTPException(404)
+        return FileResponse(path)
 
     @api.post("/camera/frame")
     async def camera_frame(request: Request):
