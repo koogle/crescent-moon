@@ -9,6 +9,7 @@
   body { margin: 0; font: 14px/1.4 system-ui, sans-serif; color: var(--ink); background: var(--surface); }
   .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 10px; }
   label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+  [hidden] { display: none !important; }
   label.inline { flex-direction: row; align-items: center; color: var(--ink); font-size: 14px; }
   input[type=text], select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; min-width: 220px; }
   button { font: inherit; padding: 7px 18px; border: 0; border-radius: 6px; background: var(--accent); color: white; cursor: pointer; }
@@ -25,9 +26,9 @@
     <input id="categories" type="text" value="">
   </label>
   <label>Camera <select id="camera"><option value="">Default camera</option></select></label>
-  <label>Model <select id="model"></select></label>
-  <label class="inline"><input id="track" type="checkbox" checked>&nbsp;Track across frames</label>
-  <label class="inline" id="deviceSwitch" hidden><input id="device" type="checkbox">&nbsp;Run on this device (WebGPU)</label>
+  <label id="modelField">Model <select id="model"></select></label>
+  <label class="inline" id="trackField"><input id="track" type="checkbox" checked>&nbsp;Track across frames</label>
+  <label class="inline" id="deviceSwitch" hidden><input id="device" type="checkbox">&nbsp;<span id="deviceText">Run on this device (WebGPU)</span></label>
   <button id="toggle">Start camera</button>
 </div>
 <div class="stage"><video id="video" muted playsinline autoplay></video><canvas id="overlay"></canvas></div>
@@ -40,13 +41,35 @@ const grabCrop = document.createElement("canvas");
 let config = null, running = false, stream = null, boxes = [], scale = 1, session = null;
 // The detector in this browser, once loaded: { model, patches, side, candidates, select }.
 let local = null, loadingLocal = null;
+// `camera?device=1` is the page of the demo's "On device" tab: only the browser's detector.
+const onDevice = new URLSearchParams(location.search).get("device") === "1";
 const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
 
 fetch("camera/config").then((r) => r.json()).then((c) => {
   config = c;
   for (const name of c.models) $("model").add(new Option(name, name, false, name === c.default));
-  // Offered when the server has an export for the browser and the browser has WebGPU.
-  $("deviceSwitch").hidden = !(c.device && navigator.gpu);
+  // Offered when the server has an export for the browser; needs WebGPU in the browser.
+  if (!c.device) {
+    if (onDevice) status.textContent = "This deployment has no export for the browser.";
+    return;
+  }
+  $("deviceSwitch").hidden = onDevice;
+  if (!navigator.gpu) {
+    $("device").disabled = true;
+    $("deviceText").textContent = "Run on this device: this browser has no WebGPU";
+    if (onDevice) {
+      toggle.disabled = true;
+      status.textContent = "This browser has no WebGPU, which the on-device detector needs "
+        + "(Safari 26, Chrome or Edge 113 and later; in Firefox it depends on the platform).";
+    }
+    return;
+  }
+  if (onDevice) {
+    $("device").checked = true;
+    $("modelField").hidden = true; $("trackField").hidden = true;
+    status.textContent = `Runs the 4-bit detector (${c.device.export}) in this browser on WebGPU. `
+      + "Start camera downloads its weights once, about 1.2 GB, and the browser keeps them.";
+  }
 });
 
 $("device").addEventListener("change", () => {
@@ -65,15 +88,17 @@ function loadLocal() {
       status.textContent = `Loading the detector into this device: ${megabytes(done)} of ${megabytes(total)} MB`;
     });
     model.device.lost.then((info) => {
-      local = null; loadingLocal = null; $("device").checked = false;
-      $("model").disabled = false; $("track").disabled = false;
+      local = null; loadingLocal = null;
+      if (onDevice) { stop(`The browser's GPU device was lost (${info.message || info.reason}).`); return; }
+      $("device").checked = false; $("model").disabled = false; $("track").disabled = false;
       status.textContent = `The browser's GPU device was lost (${info.message || info.reason}); back on the server.`;
     });
     local = { model, patches: runtime.patches, side: runtime.CROP, ...selection };
     status.textContent = "The detector is loaded on this device.";
   })().catch((error) => {
-    loadingLocal = null; $("device").checked = false;
-    $("model").disabled = false; $("track").disabled = false;
+    loadingLocal = null;
+    if (onDevice) { stop(`Could not run on this device: ${error.message}`); return; }
+    $("device").checked = false; $("model").disabled = false; $("track").disabled = false;
     status.textContent = `Could not run on this device: ${error.message}`;
   });
   return loadingLocal;
@@ -229,7 +254,9 @@ async function start() {
   await listCameras();
   running = true; boxes = []; session = crypto.randomUUID();
   toggle.textContent = "Stop"; toggle.classList.add("stop");
-  status.textContent = "Starting the GPU: the first boxes can take about a minute; the camera keeps playing.";
+  if (!$("device").checked) {
+    status.textContent = "Starting the GPU: the first boxes can take about a minute; the camera keeps playing.";
+  }
   requestAnimationFrame(draw);
   detectLoop();
 }

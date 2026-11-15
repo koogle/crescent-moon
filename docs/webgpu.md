@@ -14,7 +14,7 @@ hand-written WGSL kernels for exactly that pass are the point of the work.
 | 1. Export and reference | Implemented: `scripts/export_web.py`; the shards unpack to the model's weights bit for bit |
 | 2. Kernels with unit tests | Implemented: `web/kernels.js`, 14 cases in `web/tests/kernels.test.js` pass in headless Chromium |
 | 3. Full forward pass | Implemented: `web/model.js`, `web/select.js`. On three reference images every activation, bin, token and box matches PyTorch (below). The 500-image COCO comparison is not done |
-| 4. On the device | The camera page's "Run on this device" switch is implemented and loads the model in headless Chromium; not yet run on a phone or a desktop GPU |
+| 4. On the device | The demo's "On device (4-bit, WebGPU)" tab (`camera?device=1`) runs only the browser's detector, and the Camera tab has a "Run on this device" switch; a browser without WebGPU gets a message instead. Both load the model in headless Chromium; not yet run on a phone or a desktop GPU |
 | 5. Speed | Not started; no speed has been measured on a real GPU |
 
 ## Decisions taken

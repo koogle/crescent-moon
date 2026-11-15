@@ -418,6 +418,11 @@ def web():
                 '<iframe src="camera" allow="camera" title="Live camera detection" '
                 'style="width:100%;height:900px;border:0"></iframe>'
             )
+        with gr.Tab("On device (4-bit, WebGPU)"):
+            gr.HTML(
+                '<iframe src="camera?device=1" allow="camera" title="Detection on this device" '
+                'style="width:100%;height:900px;border:0"></iframe>'
+            )
 
     return gr.mount_gradio_app(api, page, path="/")
 

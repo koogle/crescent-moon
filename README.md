@@ -1,8 +1,8 @@
 # Crescent Moon
 
 **Demo: <https://radiantai--crescent-moon-demo-web.us-east.modal.run>** (Gradio on Modal:
-image comparison, streamed video, live camera with a "Run on this device (WebGPU)"
-switch). The app stops itself within 24 hours of each deploy; `uv run python demo_app.py`
+image comparison, streamed video, live camera, and an "On device" tab that runs the 4-bit
+detector in the browser on WebGPU). The app stops itself within 24 hours of each deploy; `uv run python demo_app.py`
 brings it back.
 
 **Fast object detection from a small vision-language model via slots.**
