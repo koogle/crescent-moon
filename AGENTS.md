@@ -2,8 +2,9 @@
 
 Fast object detection from a small vision-language model: a frozen Moondream 2 with a
 trained slot head that returns every category in one forward pass. Read `README.md`
-(method, every measured table, run commands) before changing code, and `docs/webgpu.md`
-before touching the on-device work.
+(abstract, run commands, development notes) and `docs/training-log.md` (method, every
+measured table) before changing code, and `docs/webgpu.md` before touching the on-device
+work. `docs/results.md` is the overview of the headline results.
 
 - `src/crescent_moon/`: the package. `slots.py` (head, loss), `train_slots.py`
   (training, `SlotDetector` inference with tiling), `merge.py` (selection), `run.py`
@@ -112,4 +113,6 @@ small or JSON.
 Building reports by concatenating strings in code (`lines += [...]`, f-string tables,
 prose in `print`/`write_text`) is a red flag; avoid it. Scripts emit structured results
 (JSON/CSV); render tables with a library or a checked-in template. Findings and
-narrative are written by hand in `README.md` and `docs/`, not in generator code.
+narrative are written by hand in `docs/`, not in generator code. The README stays short:
+the demo link, the abstract, how to run training and inference, and development notes.
+Measured tables go in `docs/training-log.md`, headline numbers in `docs/results.md`.

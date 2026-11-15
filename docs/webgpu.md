@@ -10,7 +10,7 @@ hand-written WGSL kernels for exactly that pass are the point of the work.
 
 | Milestone | State |
 |---|---|
-| 0. Model choice for the device | One crop measured for the current head ([README](../README.md), "Crops for the current head"). Two heads are training on the 4-bit backbone (`slots-teacher-coco-rank64-w4`, `-w4-crops1`); no result yet |
+| 0. Model choice for the device | One crop measured for the current head ([training log](training-log.md), "Crops for the current head"). Two heads are training on the 4-bit backbone (`slots-teacher-coco-rank64-w4`, `-w4-crops1`); no result yet |
 | 1. Export and reference | Implemented: `scripts/export_web.py`; the shards unpack to the model's weights bit for bit |
 | 2. Kernels with unit tests | Implemented: `web/kernels.js`, 14 cases in `web/tests/kernels.test.js` pass in headless Chromium |
 | 3. Full forward pass | Implemented: `web/model.js`, `web/select.js`. On three reference images every activation, bin, token and box matches PyTorch (below). The 500-image COCO comparison is not done |
@@ -165,7 +165,7 @@ does not shrink with fewer slots.
 
 ## Facts that set constraints
 
-- **Weight precision** (measured, [README](../README.md), "Low-bit backbone
+- **Weight precision** (measured, [training log](training-log.md), "Low-bit backbone
   weights"): rounding every backbone Linear to 8 bits per block of 32 costs nothing
   (COCO F1 0.705 -> 0.705); 4 bits costs 4.5 points (0.705 -> 0.660, area 0.657 ->
   0.597; VOC unchanged). `quantize.round_weights_` is that rounding.
@@ -188,7 +188,7 @@ does not shrink with fewer slots.
      component: vision, decoder, heads), or better 4-bit rounding;
    - measure one crop and `max_crops` 1-2 for the current head.
    Done when one configuration (bits per component, crops) is chosen with its COCO and
-   VOC numbers in the README.
+   VOC numbers in the training log.
 1. **Export and reference** (Python). A script in `scripts/`
    that writes, for the chosen head and configuration:
    - packed weights: per tensor, signed integers row-major [out, in] packed into u32
