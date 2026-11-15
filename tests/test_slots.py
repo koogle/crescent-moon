@@ -16,7 +16,12 @@ from crescent_moon.slots import (
     set_loss,
     total,
 )
-from crescent_moon.train_slots import decode_names, kept_objects, teacher_items
+from crescent_moon.train_slots import (
+    decode_names,
+    kept_objects,
+    pool_embeddings,
+    teacher_items,
+)
 
 DIM, VOCABULARY = 64, 50
 
@@ -335,3 +340,13 @@ def test_feature_variant_names_the_backbone_configuration():
     assert feature_variant({}) == ""
     assert feature_variant({"weight_bits": 4}) == "-w4"
     assert feature_variant({"weight_bits": 4, "max_crops": 1}) == "-w4-crops1"
+
+
+def test_pool_embeddings_averages_cells_and_keeps_partial_ones():
+    grid = torch.arange(27 * 27, dtype=torch.float32).view(1, 27 * 27, 1)
+    pooled = pool_embeddings(grid, 2)
+    assert pooled.shape == (1, 14 * 14, 1)
+    assert pooled[0, 0, 0] == (0 + 1 + 27 + 28) / 4
+    # The last column holds one grid column, the last cell one position.
+    assert pooled[0, 13, 0] == (26 + 53) / 2
+    assert pooled[0, -1, 0] == 27 * 27 - 1

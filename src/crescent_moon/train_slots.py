@@ -32,6 +32,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from crescent_moon.merge import select, tile_grid
 from crescent_moon.slots import (
@@ -292,9 +293,22 @@ class Features:
         return embeddings, targets, ids, truths
 
 
-def image_cache(inner, functions, embeddings, prompt=None, trace=None):
+def pool_embeddings(embeddings, pool):
+    """Image embeddings [B, 729, D] averaged over `pool` x `pool` cells of their 27 x 27
+    grid (the last cell of a row or column is smaller): [B, ceil(27 / pool) ** 2, D]."""
+    batch, tokens, dim = embeddings.shape
+    side = math.isqrt(tokens)
+    grid = embeddings.float().view(batch, side, side, dim).permute(0, 3, 1, 2)
+    pooled = F.avg_pool2d(grid, pool, ceil_mode=True, count_include_pad=False)
+    return pooled.flatten(2).transpose(1, 2).to(embeddings.dtype)
+
+
+def image_cache(inner, functions, embeddings, prompt=None, trace=None, pool=1):
     """Prefix keys and values for a batch of image embeddings [B, 729, D], followed by
-    the prompt token ids [B, L] when given. `trace` is passed to `prefix_cache`."""
+    the prompt token ids [B, L] when given. `pool` above 1 shortens the image prefix with
+    `pool_embeddings` (a head's `prefix_pool`); `trace` is passed to `prefix_cache`."""
+    if pool > 1:
+        embeddings = pool_embeddings(embeddings, pool)
     bos = functions.text_encoder(
         torch.tensor([[inner.config.tokenizer.bos_id]], device=embeddings.device), inner.text
     )
@@ -340,7 +354,17 @@ def decode_names(tokens, vocabulary):
 
 @torch.no_grad()
 def heldout_scores(
-    head, inner, functions, data, indices, batch_size, device, thresholds, options, prompting=None
+    head,
+    inner,
+    functions,
+    data,
+    indices,
+    batch_size,
+    device,
+    thresholds,
+    options,
+    prompting=None,
+    pool=1,
 ):
     """Loss terms, box and label quality by sampler passes, and one-pass F1 at IoU 0.5 per
     objectness threshold.
@@ -359,7 +383,7 @@ def heldout_scores(
         chunk = indices[start : start + batch_size]
         prompts = batch_prompts(data, chunk, prompting, random.Random(start), heldout=True)
         embeddings, targets, prompt, truths = data.batch(chunk, device, prompts)
-        cache = image_cache(inner, functions, embeddings, prompt)
+        cache = image_cache(inner, functions, embeddings, prompt, pool=pool)
         rotate = functions.apply_rotary_emb
         objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
         terms, (b_index, s_index, truth_tokens, truth_bins), stats = set_loss(
@@ -525,6 +549,7 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
                     thresholds,
                     options,
                     config.get("prompts"),
+                    config.get("prefix_pool", 1),
                 )
                 scores.write(
                     json.dumps({"step": step, "seconds": time.time() - started} | row) + "\n"
@@ -548,7 +573,9 @@ def train(config, features, out, device="cuda", saved=lambda: None, deadline=Non
             prompt_rng = random.Random(config["seed"] * 1_000_003 + step)
             prompts = batch_prompts(data, picks, config.get("prompts"), prompt_rng)
             embeddings, targets, prompt, _ = data.batch(picks, device, prompts)
-            cache = image_cache(inner, functions, embeddings, prompt)
+            cache = image_cache(
+                inner, functions, embeddings, prompt, pool=config.get("prefix_pool", 1)
+            )
             rotate = functions.apply_rotary_emb
             objectness, box_logits, logits = head(inner.text, inner.region, cache, rotate)
             ignore = None
@@ -671,6 +698,7 @@ class SlotDetector:
             weight_bits = config.get("weight_bits") if weight_bits is None else weight_bits
             max_crops = config.get("max_crops") if max_crops is None else max_crops
         configure_backbone(self.inner, weight_bits, max_crops, weight_group)
+        self.prefix_pool = config.get("prefix_pool", 1)
         self.head = SlotHead(
             self.inner.text, config["slots"], config["label_tokens"], config["rank"]
         )
@@ -738,7 +766,7 @@ class SlotDetector:
         label and confidences."""
         if prompt is not None:
             prompt = prompt.expand(embeddings.size(0), -1)
-        cache = image_cache(self.inner, self.functions, embeddings, prompt)
+        cache = image_cache(self.inner, self.functions, embeddings, prompt, pool=self.prefix_pool)
         objectness, boxes, tokens, confidence = sample(
             self.head,
             self.inner.text,
