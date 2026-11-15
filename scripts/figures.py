@@ -729,8 +729,8 @@ SELECTION_SERIES = [
     ("COCO 23k, Carbon", "slots-coco23k-carbon-rank64"),
     ("COCO 23k, human + Carbon", "slots-coco23k-merged-rank64"),
     ("+ tile crops in training", "slots-tilecrops-teacher-coco-rank64"),
-    ("r64 on 4-bit weights, trained on full precision", "slots-teacher-coco-rank64-w4"),
-    ("r64 on 4-bit weights, trained on them", "slots-teacher-coco-rank64-w4-head"),
+    ("r64 at 4 bits", "slots-teacher-coco-rank64-w4"),
+    ("r64 trained at 4 bits", "slots-teacher-coco-rank64-w4-head"),
     ("same, one crop", "slots-teacher-coco-rank64-w4-crops1"),
 ]
 SELECTION_MODES = (("fast", None), ("tiled", 4))
@@ -795,7 +795,7 @@ def selection_area_figure(artifacts, out):
         axis.legend(frameon=False, fontsize=8, labelcolor=INK, loc="upper right", ncols=2)
     axes[-1].annotate(
         "Moondream gives no confidence scores, so it has no curve or area.",
-        (0.0, -0.16),
+        (0.0, -0.3),
         xycoords="axes fraction",
         fontsize=8,
         color=MUTED,

@@ -262,7 +262,10 @@ on COCO (top) and VOC (bottom), from the full image only (left) and with $2\time
 (right). Dots: each head at its threshold tuned on COCO. Diamonds: Moondream~2 and 3.1,
 which give no confidence and so one point each. On COCO the full-image curves pass inside
 Moondream~3.1's point and the tiled ones reach it; on VOC Moondream~3.1 sits just outside
-the full-image curves and on the tiled rank-128 curve.}
+the full-image curves and on the tiled rank-128 curve. The two lowest curves run the
+rank-64 head on a backbone rounded to 4 bits per weight, as a phone or browser would hold
+it: trained on full precision (yellow), and trained on the rounded backbone (violet),
+which recovers 1.5 of the 4.5 points of COCO F1 the rounding costs and loses on VOC.}
 \label{fig:pr}
 \end{figure*}
 
@@ -377,7 +380,9 @@ slot head at the threshold tuned on COCO. Captions give boxes and seconds per im
 \includegraphics[width=0.92\textwidth]{selection-areas.jpg}
 \caption{Pooled area under the precision-recall curve (IoU 0.5) and per-category AP
 (IoU 0.5 to 0.95) of every slot head under the final selection, without tiles (solid)
-and with tiles (hatched), on COCO and VOC.}
+and with tiles (hatched), on COCO and VOC. The last bars run the rank-64 head on 4-bit
+backbone weights: trained on full precision, trained on the 4-bit backbone, and that with
+one image crop.}
 \label{fig:areas}
 \end{figure}
 \end{document}
