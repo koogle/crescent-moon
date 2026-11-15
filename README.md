@@ -891,9 +891,9 @@ configuration the low-bit table above measures at F1 0.660; heads trained on the
 backbone are in progress.
 
 Tested here in headless Chromium, whose WebGPU runs on the CPU: the kernels against
-plain arithmetic (14 cases), and the whole pass against PyTorch on one image: every
-activation within 1.5e-4 of the largest value, all 192 box bins and 144 label tokens
-identical, and the 15 selected boxes identical. Not measured: speed on a real GPU or a
+plain arithmetic (14 cases), and the whole pass against PyTorch on three images: every
+activation within 3.2e-4 of the largest value, all 192 box bins and 144 label tokens
+identical, and the selected boxes (15, 7 and 4) identical. Not measured: speed on a real GPU or a
 phone, and accuracy over a dataset in the browser.
 [`docs/webgpu.md`](docs/webgpu.md) has the design, the status of each milestone and
 what is not done.
