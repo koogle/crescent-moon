@@ -7,10 +7,14 @@
 // u32 fields, listed in FIELDS under the kernel's name in the order the shader declares them.
 
 const GROUP = 32; // weights per scale
-// The tile one invocation of the quantised product computes: outputs by token rows.
-const OUTS = 4, ROWS = 16;
-// Query rows of one head an invocation of attention handles.
-const QUERIES = 2;
+// Work per invocation: the tile of the quantised product (outputs by token rows; rows
+// a multiple of 4) and the query rows of one head in attention. TUNING is the fastest
+// on an NVIDIA L4; CHOICES are what `tune` in model.js times on the device in use.
+export const TUNING = { outs: 4, rows: 16, queries: 2 };
+export const CHOICES = {
+  tiles: [[4, 16], [4, 8], [8, 8], [2, 16], [4, 4], [2, 8]],
+  queries: [2, 1, 4],
+};
 const FIELDS = {};
 
 const GELU = `
@@ -36,7 +40,7 @@ const WRITE4 = (value) => `
     }
   }`;
 
-export function quantisedLinear(bits) {
+export function quantisedLinear(bits, OUTS = TUNING.outs, ROWS = TUNING.rows) {
   // A word holds 32 / bits weights; they are decoded four at a time into a vec4 and
   // multiplied with four columns of a row in one dot product. One invocation computes a
   // tile of OUTS outputs by ROWS rows, so each input vec4 is loaded once for OUTS outputs
@@ -206,7 +210,7 @@ FIELDS.rotary = ["rows", "stride", "dim", "heads", "position0"];
 // side): y[row, head] = softmax_n(q . k_n / sqrt(width)) v_n. Rows before `prefix`
 // attend to the first `prefix` rows, the others to all rows. The softmax is computed
 // online, rescaling the running sum whenever a larger score appears.
-export function attention(headWidth) {
+export function attention(headWidth, QUERIES = TUNING.queries) {
   const quads = headWidth / 4;
   return `
 struct P { rows: u32, stride: u32, dim: u32, heads: u32, prefix: u32, y_stride: u32 }
@@ -334,8 +338,10 @@ FIELDS.argmax = ["rows", "x_stride", "segments", "width", "y0"];
 // Compiles kernels once per device and builds the steps of a pass: each step is a
 // pipeline, a bind group holding its uniform block and buffers, and a dispatch size.
 export class Kernels {
-  constructor(device) {
+  // `tuning`: { outs, rows, queries }, see TUNING.
+  constructor(device, tuning = TUNING) {
     this.device = device;
+    this.tuning = tuning;
     this.pipelines = new Map();
   }
 
@@ -374,9 +380,10 @@ export class Kernels {
       outs: layer.rows, y_row0: v.yRow0 ?? 0, y_stride: v.yStride, y_col0: v.yCol0 ?? 0,
       scale_stride: layer.scaleStride, flags: (v.add ? 1 : 0) | (v.gelu ? 2 : 0),
     };
-    return this.step(`quantised-linear-${bits}`, quantisedLinear(bits), FIELDS.quantisedLinear,
-      values, [x, layer.weight, layer.scale, layer.bias, y],
-      [Math.ceil(Math.ceil(layer.rows / OUTS) / 8), Math.ceil(Math.ceil(v.rows / ROWS) / 8)]);
+    const { outs, rows } = this.tuning;
+    return this.step(`quantised-linear-${bits}`, quantisedLinear(bits, outs, rows),
+      FIELDS.quantisedLinear, values, [x, layer.weight, layer.scale, layer.bias, y],
+      [Math.ceil(Math.ceil(layer.rows / outs) / 8), Math.ceil(Math.ceil(v.rows / rows) / 8)]);
   }
 
   halfLinear(x, weight, y, v) {
@@ -419,8 +426,9 @@ export class Kernels {
       rows: v.rows, stride: v.stride, dim: v.dim, heads: v.heads, prefix: v.prefix ?? 0,
       y_stride: v.yStride,
     };
-    return this.step(`attention-${width}`, attention(width), FIELDS.attention, values, [qkv, y],
-      [Math.ceil(v.heads / 8), Math.ceil(Math.ceil(v.rows / QUERIES) / 8)]);
+    const { queries } = this.tuning;
+    return this.step(`attention-${width}`, attention(width, queries), FIELDS.attention, values,
+      [qkv, y], [Math.ceil(v.heads / 8), Math.ceil(Math.ceil(v.rows / queries) / 8)]);
   }
 
   // v: { side, pool, xStride, dim, yRow0, yStride }

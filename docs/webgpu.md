@@ -126,6 +126,16 @@ attention and layer norm, about 0.2 s. Beyond that the frame needs less arithmet
 image positions in the prefix, which means training a head for it) or cheaper arithmetic
 (FP16 where a GPU is faster with it).
 
+**Tuning on the device.** The best tile depends on the GPU, so the runtime measures it:
+`tune` in `web/model.js` times each of the kernels' `CHOICES` (six tiles of the quantised
+product, attention with 1, 2 or 4 query rows) on the work of one decoder block when the
+model loads, builds the pass with the fastest, and `loadModel` keeps the choice in the
+browser's local storage. The camera page shows the choice under the Model list. On the
+L4 it takes 5.4 s and picks 4 x 16 and 2 query rows (run `web-bench-tune-003`; seconds
+per product: 4 x 16 0.0043, 8 x 8 0.0044, 4 x 8 0.0049, 2 x 16 0.0053, 2 x 8 0.0057,
+4 x 4 0.0059; per attention: 2 rows 0.0077, 1 row 0.0106, 4 rows 0.0194). Every choice is
+checked by `web/tests/kernels.test.js`. No measurement on a phone yet.
+
 With these kernels the pass matches the PyTorch reference on the L4 on all three images
 (36 of 36 checks; run `web-bench-final-l4`, and `web-bench-norm4-001` with the vec4 layer
 norm, which takes 0.011 GPU seconds per frame in place of 0.051).

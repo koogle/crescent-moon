@@ -1,7 +1,7 @@
 // Each kernel against a plain JavaScript computation of the same arithmetic on random
 // inputs, including padded strides, row and column offsets and the add and GELU flags.
 
-import { Kernels, encode, read, upload, storage } from "../kernels.js";
+import { CHOICES, Kernels, TUNING, encode, read, upload, storage } from "../kernels.js";
 
 function random(seed) {
   let s = seed >>> 0;
@@ -239,6 +239,17 @@ export async function run(query, log) {
     ["pool grid, single cells", () => poolKernel(device, kernels, { side: 5, pool: 1, dim: 16, yRow0: 0 })],
     ["argmax and probability", () => argmaxKernel(device, kernels, { rows: 6, segments: 2, width: 300, y0: 3 })],
   ];
+  // Every tile and query count the runtime may choose on a device.
+  for (const [outs, rows] of CHOICES.tiles) {
+    const tiled = new Kernels(device, { ...TUNING, outs, rows });
+    cases.push([`quantised linear, 4 bits, tile ${outs} x ${rows}`, () => quantised(device, tiled, 4,
+      { rows: 21, columns: 76, outs: 19, add: true, activation: true, xRow0: 1, yRow0: 2, yCol0: 4 })]);
+  }
+  for (const queries of CHOICES.queries) {
+    const grouped = new Kernels(device, { ...TUNING, queries });
+    cases.push([`attention, ${queries} query rows per invocation`,
+      () => attentionKernel(device, grouped, { rows: 13, dim: 128, heads: 2, prefix: 7 })]);
+  }
   const results = { passed: 0, failed: 0, cases: [] };
   for (const [name, test] of cases) {
     const error = await test();

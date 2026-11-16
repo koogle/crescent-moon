@@ -4,7 +4,7 @@
 //   node web/tests/run.cjs bench --export artifacts/web/NAME [--frames N] [--gpu vulkan]
 
 import { profile } from "../kernels.js";
-import { SlotModel, loadWeights, patches, requestDevice } from "../model.js";
+import { SlotModel, loadWeights, patches, requestDevice, tune } from "../model.js";
 
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
 
@@ -22,9 +22,14 @@ export async function run(query, log) {
   device.addEventListener("uncapturederror", (event) => log(`GPU ERROR ${event.error.message}`));
   const manifest = await (await fetch(new URL("manifest.json", base))).json();
   const started = performance.now();
-  const model = new SlotModel(device, manifest, await loadWeights(device, base, manifest));
+  const tensors = await loadWeights(device, base, manifest);
   const load = (performance.now() - started) / 1000;
   log(`loaded in ${load.toFixed(1)} s`);
+  const tuneStarted = performance.now();
+  const tuning = await tune(device, manifest, tensors);
+  const tuneSeconds = (performance.now() - tuneStarted) / 1000;
+  log(`tuned in ${tuneSeconds.toFixed(1)} s: ${JSON.stringify(tuning)}`);
+  const model = new SlotModel(device, manifest, tensors, tuning);
   const image = query.get("image") || manifest.reference[0];
   const crop = new Uint8Array(await (await fetch(new URL(`reference/${image}/crop.u8`, base))).arrayBuffer());
   const rows = patches(crop, 3);
@@ -50,5 +55,5 @@ export async function run(query, log) {
     }
     log(`GPU seconds per kernel: ${JSON.stringify(kernels)}`);
   }
-  return { passed: 1, failed: 0, adapter: described, kernels, export: manifest.head, load_seconds: load, frames, median: medians };
+  return { passed: 1, failed: 0, adapter: described, kernels, export: manifest.head, load_seconds: load, tuning, tune_seconds: tuneSeconds, frames, median: medians };
 }

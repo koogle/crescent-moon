@@ -3,7 +3,7 @@
 // projection, the decoder (image prefix and slots together, block by block) and the
 // read-out heads. `docs/webgpu.md` describes the pass.
 
-import { Kernels, encode, storage, upload } from "./kernels.js";
+import { CHOICES, Kernels, TUNING, encode, storage, upload } from "./kernels.js";
 
 const PATCH = 14, GRID = 27, CROP = PATCH * GRID;
 const IMAGE_ROWS = GRID * GRID; // 729 image positions
@@ -139,8 +139,8 @@ export function patches(pixels, channels) {
 }
 
 export class SlotModel {
-  // `tensors` from loadWeights; `manifest` of the same export.
-  constructor(device, manifest, tensors) {
+  // `tensors` from loadWeights; `manifest` of the same export; `tuning` from `tune`.
+  constructor(device, manifest, tensors, tuning = TUNING) {
     this.device = device;
     this.manifest = manifest;
     this.slots = manifest.head.slots;
@@ -151,7 +151,8 @@ export class SlotModel {
     this.prefix = 1 + Math.ceil(GRID / this.pool) ** 2;
     this.rows = this.prefix + this.slotRows;
     this.objectnessBias = tensors["slots.objectness.bias"].value;
-    this.kernels = new Kernels(device);
+    this.tuning = tuning;
+    this.kernels = new Kernels(device, tuning);
     this.build(tensors);
   }
 
@@ -360,11 +361,69 @@ export async function requestDevice(features = []) {
   return adapter.requestDevice({ requiredLimits, requiredFeatures });
 }
 
+// The fastest of the kernels' CHOICES on this device: each is timed on the work of one
+// decoder block (its MLP's first product and its attention, over as many rows as a frame
+// has, on zeros). Returns { outs, rows, queries, seconds: { choice: seconds } }.
+export async function tune(device, manifest, tensors) {
+  const T = TEXT;
+  const rows = 1 + Math.ceil(GRID / manifest.head.prefix_pool) ** 2
+    + manifest.head.slots * (manifest.selection.coordinates + manifest.head.label_tokens);
+  const x = storage(device, rows * T.dim * 4), hidden = storage(device, rows * T.hidden * 4);
+  const qkv = storage(device, rows * 3 * T.dim * 4);
+  const layer = tensors["text.blocks.0.mlp.fc1"];
+  const seconds = {};
+  const REPEATS = 8;
+  const time = async (name, make) => {
+    let best = Infinity;
+    for (let run = 0; run < 4; run++) {  // the first run also compiles the kernel
+      const start = performance.now();
+      device.queue.submit([encode(device, Array.from({ length: REPEATS }, make))]);
+      await device.queue.onSubmittedWorkDone();
+      if (run) best = Math.min(best, (performance.now() - start) / 1000 / REPEATS);
+    }
+    seconds[name] = best;
+    return best;
+  };
+  // The weights' first use is slow on some devices; keep it out of the first choice.
+  await time("first use", () => new Kernels(device).quantisedLinear(layer.bits, x, layer, hidden,
+    { rows, xStride: T.dim, yStride: T.hidden }));
+  const fastest = async (choices, name, make) => {
+    const timed = [];
+    for (const choice of choices) timed.push([await time(name(choice), make(choice)), choice]);
+    return timed.reduce((a, b) => (b[0] < a[0] ? b : a))[1];
+  };
+  const [outs, tileRows] = await fastest(CHOICES.tiles, ([o, r]) => `product ${o} x ${r}`,
+    ([o, r]) => {
+      const kernels = new Kernels(device, { ...TUNING, outs: o, rows: r });
+      return () => kernels.quantisedLinear(layer.bits, x, layer, hidden,
+        { rows, xStride: T.dim, yStride: T.hidden });
+    });
+  const queries = await fastest(CHOICES.queries, (n) => `attention ${n}`, (n) => {
+    const kernels = new Kernels(device, { ...TUNING, queries: n });
+    return () => kernels.attention(qkv, x,
+      { rows, stride: 3 * T.dim, dim: T.dim, heads: T.heads, yStride: T.dim });
+  });
+  for (const buffer of [x, hidden, qkv]) buffer.destroy();
+  return { outs, rows: tileRows, queries, seconds };
+}
+
+// `tune`, remembered in this browser (the choice belongs to the device's GPU).
+async function tuned(device, manifest, tensors) {
+  const key = `crescent-moon-tuning-${manifest.head.prefix_pool}-${JSON.stringify(CHOICES)}`;
+  try {
+    const kept = JSON.parse(localStorage.getItem(key));
+    if (kept) return kept;
+  } catch { /* no storage, or nothing usable in it: measure */ }
+  const tuning = await tune(device, manifest, tensors);
+  try { localStorage.setItem(key, JSON.stringify(tuning)); } catch { /* not kept */ }
+  return tuning;
+}
+
 export async function loadModel(base, progress) {
   const device = await requestDevice();
   const manifest = await (await fetch(new URL("manifest.json", base))).json();
   const tensors = await loadWeights(device, base, manifest, progress);
-  return new SlotModel(device, manifest, tensors);
+  return new SlotModel(device, manifest, tensors, await tuned(device, manifest, tensors));
 }
 
 export { CROP };

@@ -127,7 +127,9 @@ function loadLocal() {
     });
     local = { model, patches: runtime.patches, side: runtime.CROP, ...selection };
     $("progress").hidden = true; $("download").textContent = "Detector ready";
-    $("downloadText").textContent = ""; toggle.disabled = false;
+    const { outs, rows, queries } = model.tuning;
+    $("downloadText").textContent = `Fastest kernels on this GPU: products ${outs} x ${rows}, attention ${queries}`;
+    toggle.disabled = false;
     status.textContent = "The detector is loaded on this device; start the camera.";
   })().catch((error) => {
     loadingLocal = null; $("download").disabled = false; $("progress").hidden = true; $("downloadText").textContent = "";
