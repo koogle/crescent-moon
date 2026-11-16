@@ -18,7 +18,10 @@ work. `docs/results.md` is the overview of the headline results.
   `slots.py` / `train_slots.py` is the reference; `scripts/export_web.py` writes the
   weights and reference activations the browser tests compare against.
 - `modal_app.py`: Modal app `crescent-moon` (training, evaluation, Photon, the browser
-  runtime on a GPU, deadline supervisor). `demo_app.py` + `demo_camera.html`: Modal app `crescent-moon-demo`.
+  runtime on a GPU, deadline supervisor).
+- `space/`: the demo, a Hugging Face Space (`jfrick/crescent-moon`, Gradio on ZeroGPU):
+  `app.py`, the camera page `camera.html`, `demo.json` (models). `scripts/push_space.py`
+  assembles it with the package and `web/` and pushes it.
 - `configs/`: run configs. `scripts/`: studies, figures, label tools. `tests/`.
   `paper/`: LaTeX paper. `docs/`: plans and findings.
 
@@ -72,7 +75,7 @@ reviewable units, findings (plans, measured results) in their own documentation 
 ## Modal job runtime
 
 Every Modal job launched by an agent must stop automatically within 24 hours (86,400
-seconds) of launch, including detached and background jobs and the deployed demo.
+seconds) of launch, including detached and background jobs.
 Enforce this through Modal's API before launch so shutdown survives agent disconnection.
 
 - Set a server-side execution timeout of at most `24 * 60 * 60` seconds with
@@ -88,8 +91,6 @@ Enforce this through Modal's API before launch so shutdown survives agent discon
 - Keep retries disabled. Do not restart a timed-out job automatically to bypass the cap.
 - `FunctionCall.get(timeout=...)` only limits how long the caller waits. Reminders,
   local timers and manual cleanup are not shutdown enforcement.
-- The demo is deployed only through `python demo_app.py`, which spawns `shutdown_at` to
-  stop the app just under 24 hours later. A bare `modal deploy demo_app.py` skips that.
 - Save checkpoints and partial results early enough to survive shutdown.
 
 See Modal's [timeout semantics](https://modal.com/docs/guide/timeouts) and

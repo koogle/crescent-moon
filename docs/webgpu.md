@@ -24,7 +24,7 @@ hand-written WGSL kernels for exactly that pass are the point of the work.
   (`web/<export name>/`) under `/weights/`; nothing is published for it. The browser
   keeps the shards in Cache Storage, keyed by content, so they download once.
 - **Code layout**: runtime in `web/`, packing in `src/crescent_moon/pack.py`, export in
-  `scripts/export_web.py`, the switch in `demo_camera.html`.
+  `scripts/export_web.py`, the switch in `space/camera.html`.
 - **One crop.** The device runs `max_crops` 1, for which Moondream's local crop equals
   the global crop: the vision encoder runs once and its features are used twice.
 - **No key/value cache.** Prefix and slot positions go through each decoder block

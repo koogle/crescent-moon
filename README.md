@@ -1,9 +1,10 @@
 # Crescent Moon
 
-**Demo: <https://radiantai--crescent-moon-demo-web.us-east.modal.run>** (Gradio on Modal:
-image comparison, streamed video, and a live camera whose Model list includes the 4-bit
-detector running in the browser on WebGPU). The app stops itself within 24 hours of each deploy; `uv run python demo_app.py`
-brings it back.
+[![Open in Spaces](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-sm.svg)](https://huggingface.co/spaces/jfrick/crescent-moon)
+
+**Demo: <https://huggingface.co/spaces/jfrick/crescent-moon>** (a Hugging Face Space: live
+detection on a camera or a video file, with the 4-bit detector running in the browser on
+WebGPU, image comparison with Moondream 2, and streamed video).
 
 **Fast object detection from a small vision-language model via slots.**
 
@@ -45,8 +46,8 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Training, evaluation and the demo run on [Modal](https://modal.com) and need a Modal
-token and a Hugging Face token in the environment.
+Training and evaluation run on [Modal](https://modal.com) and need a Modal token and a
+Hugging Face token in the environment; the demo is a Hugging Face Space.
 
 ## Inference
 
@@ -64,14 +65,16 @@ result = detector.detect(Image.open("photo.jpg"), ["person", "dog", "car"])
 result["boxes"], result["scores"]  # per phrase: [x0, y0, x1, y1] in pixels, and scores
 ```
 
-Phrases are COCO category names. `configs/demo.json` lists the published heads with their
+Phrases are COCO category names. `space/demo.json` lists the published heads with their
 thresholds.
 
-The demo (`demo_app.py`, `demo_camera.html`) compares the slot heads with Moondream 2 and
-3.1 on images, runs one model over a video, and detects on the live camera:
+The demo is the Space in `space/` (`app.py`, the camera page `camera.html`): Gradio on
+ZeroGPU, with Moondream 2 and the slot heads on the Space's GPU and the 4-bit detector in
+the visitor's browser. Assemble it with the package, the browser runtime and example
+images, and push it:
 
 ```sh
-uv run python demo_app.py
+uv run python scripts/push_space.py --examples artifacts/demo-examples --push
 ```
 
 In the browser, `web/` runs the detector on WebGPU with hand-written WGSL kernels. Export
@@ -138,8 +141,8 @@ the summary under `artifacts/<run id>/`.
 
 - **Layout.** `src/crescent_moon/` is the package (`slots.py` head and loss,
   `train_slots.py` training and `SlotDetector`, `merge.py` selection, `run.py` evaluation,
-  `tasks.py` datasets, `metrics.py`), `web/` the browser runtime, `modal_app.py` and
-  `demo_app.py` the Modal apps, `configs/` run configs, `scripts/` studies and exports,
+  `tasks.py` datasets, `metrics.py`), `web/` the browser runtime, `modal_app.py` the Modal app,
+  `space/` the demo Space, `configs/` run configs, `scripts/` studies and exports,
   `paper/` the LaTeX paper (`latexmk -pdf -outdir=../artifacts/paper main.tex` from
   `paper/`).
 - **One of each.** One training loop, one evaluation harness, one launcher, one

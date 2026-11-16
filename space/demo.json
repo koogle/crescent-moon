@@ -1,0 +1,39 @@
+{
+  "moondream": {
+    "repo": "vikhyatk/moondream2",
+    "revision": "2025-06-21"
+  },
+  "weights_repo": "jfrick/crescent-moon",
+  "slot_heads": {
+    "Slots, rank 64, fast": {
+      "run": "slots-teacher-coco-rank64",
+      "threshold": 0.29,
+      "options": {
+        "tiles": 1
+      }
+    },
+    "Slots, rank 128, fast": {
+      "run": "slots-teacher-coco-rank128",
+      "threshold": 0.31,
+      "options": {
+        "tiles": 1
+      }
+    },
+    "Slots, rank 128, tiled": {
+      "run": "slots-teacher-coco-rank128",
+      "threshold": 0.33,
+      "options": {
+        "tiles": 2
+      }
+    },
+    "Slots, tile crops, tiled": {
+      "run": "slots-tilecrops-teacher-coco-rank64",
+      "threshold": 0.33,
+      "options": {
+        "tiles": 2
+      }
+    }
+  },
+  "camera_default": "Slots, rank 64, fast",
+  "device_export": "slots-teacher-coco-rank64-w4"
+}

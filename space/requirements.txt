@@ -1,0 +1,12 @@
+torch==2.8.0
+transformers==4.52.4
+accelerate==1.7.0
+einops==0.8.1
+pyvips-binary==8.16.0
+pyvips==2.2.3
+numpy==2.2.6
+scipy==1.15.3
+pillow==11.2.1
+pyarrow>=17
+imageio-ffmpeg==0.8.0
+huggingface-hub>=0.33.5,<1

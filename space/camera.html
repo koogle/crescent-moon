@@ -99,6 +99,8 @@ fetch("camera/config", { cache: "no-store" }).then((r) => r.json()).then((c) => 
     entry.text = "On this device: this browser has no WebGPU";
   }
   $("model").add(entry);
+  // Where the browser can run the detector itself, that is the first choice.
+  if (navigator.gpu) { $("model").value = DEVICE; showDeviceStep(); }
 });
 
 // One button starts the camera. For the detector in this browser it first loads the
@@ -310,6 +312,42 @@ function draw() {
   if (running) requestAnimationFrame(draw);
 }
 
+// One call of the Space's `frame` API: Gradio answers a POST with an event id and
+// streams the result of that event.
+// On huggingface.co the Space's GPU time is counted against the visitor: the page that
+// embeds the Space hands out the headers that identify them, as it does to Gradio.
+let gpuHeaders = null;
+function visitorHeaders() {
+  gpuHeaders ??= new Promise((resolve) => {
+    if (top === window) { resolve({}); return; }
+    // The answer comes back on the channel's other port, as for Gradio's own client.
+    const channel = new MessageChannel();
+    const done = (headers) => { channel.port1.close(); resolve(headers && typeof headers === "object" ? headers : {}); };
+    channel.port1.onmessage = (event) => done(event.data);
+    try { top.postMessage("zerogpu-headers", "https://huggingface.co", [channel.port2]); } catch { done({}); }
+    setTimeout(() => done({}), 3000);
+  });
+  return gpuHeaders;
+}
+
+async function serverFrame(data) {
+  const posted = await fetch("gradio_api/call/frame", {
+    method: "POST", headers: { "Content-Type": "application/json", ...(await visitorHeaders()) },
+    body: JSON.stringify({ data }),
+  });
+  if (!posted.ok) throw new Error(`HTTP ${posted.status}`);
+  const { event_id: id } = await posted.json();
+  const events = await (await fetch(`gradio_api/call/frame/${id}`)).text();
+  const last = events.trim().split("\n\n").pop();
+  const kind = /^event: (.*)$/m.exec(last)?.[1], body = /^data: (.*)$/m.exec(last)?.[1];
+  if (kind !== "complete") {
+    // Gradio hides the reason; on ZeroGPU it is nearly always the visitor's GPU allowance.
+    throw new Error(JSON.parse(body || "null")?.error
+      || "no GPU time for this visitor (sign in on huggingface.co, or use the model that runs on this device)");
+  }
+  return JSON.parse(body)[0];
+}
+
 async function detectLoop(mine) {
   const started = performance.now();
   let first = true;
@@ -339,28 +377,16 @@ async function detectLoop(mine) {
     const s = Math.min(1, config.side / Math.max(w, h));
     grab.width = Math.round(w * s); grab.height = Math.round(h * s);
     grab.getContext("2d").drawImage(video, 0, 0, grab.width, grab.height);
-    const blob = await new Promise((r) => grab.toBlob(r, "image/jpeg", 0.85));
-    const query = new URLSearchParams({
-      session, model: $("model").value, categories: $("categories").value,
-      track: $("track").checked ? "1" : "0",
-    });
+    const jpeg = grab.toDataURL("image/jpeg", 0.85).split(",")[1];
     const t0 = performance.now();
-    let response;
+    let result;
     try {
-      response = await fetch(`camera/frame?${query}`, { method: "POST", body: blob });
+      result = await serverFrame([jpeg, $("model").value, $("categories").value, $("track").checked, session]);
     } catch (error) {
-      status.textContent = `Request failed (${error}); retrying.`;
-      await new Promise((r) => setTimeout(r, 1000));
-      continue;
+      if (mine === run) stop(`The Space's GPU did not answer: ${error.message}`);
+      return;
     }
-    if (!response.ok) {
-      const detail = await response.text();
-      if (response.status === 410) { stop(detail); return; }
-      status.textContent = `Error ${response.status}: ${detail}; retrying.`;
-      await new Promise((r) => setTimeout(r, 1000));
-      continue;
-    }
-    const result = await response.json();
+    if (result.stop) { if (mine === run) stop(result.stop); return; }
     if (mine !== run) return;
     notice("");
     boxes = result.boxes; scale = w / grab.width;
@@ -403,7 +429,7 @@ async function start() {
   if (onDevice()) {
     status.textContent = "Running on this device.";
   } else {
-    notice("Starting the server's GPU. The first boxes can take about a minute; that wait is "
+    notice("Waiting for the Space's GPU. The first boxes can take a while; that wait is "
       + "the start-up, not the detector's speed.");
     status.textContent = "Starting the GPU: the first boxes can take about a minute; the picture keeps playing.";
   }

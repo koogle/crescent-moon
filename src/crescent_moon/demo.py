@@ -1,4 +1,4 @@
-"""Drawing and video helpers for the detection demo (`demo_app.py`).
+"""Drawing and video helpers for the detection demo (`space/app.py`).
 
 A detection is (label, [x0, y0, x1, y1]) in pixels of the image it was found in.
 """

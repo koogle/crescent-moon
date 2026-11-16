@@ -870,23 +870,31 @@ patches), prepared by `src/crescent_moon/images.py` with `configs/teacher-images
 
 ## Demo
 
-`demo_app.py` deploys a web page on Modal for comparing detectors on images (uploaded,
-or 16 examples: COCO val images and Objects365 images no labeller saw) and for running
-one model on every n-th frame of a video. The annotated video streams back to the page
-in two-second H.264 chunks while the GPU works through it. Slot-head boxes are labelled
-with their score, objectness × label confidence × box confidence: a ranking score, not
-a probability (kept from 0.013; half of the kept boxes on COCO val score under 0.04).
-Moondream gives no confidence, so its boxes carry only the label. The models and thresholds are in
-`configs/demo.json`: Moondream 2's `detect`, four slot heads (the last, trained with tile
-crops and run with 2 x 2 tiles, is the video default) and Moondream 3.1 through Photon. A Camera tab (`demo_camera.html`) plays the browser's webcam, chosen from a list when
-there are several (switchable while running), and draws the latest boxes over it. The page sends one frame at a time, downscaled to 640 pixels, and the
-next only once the answer is back; tracking runs per stream on the web container. With
-the default rank-64 fast head and a warm GPU, a frame took 0.095 s on the GPU and 0.124 s
-through the web server, measured with a browser's simulated camera; the browser's own
-network adds to that (0.19 s from the test machine). Deploying with `.venv/bin/python demo_app.py` also spawns `shutdown_at`, which
-stops the app just under 24 hours later; the URL is public until then.
+The demo is a Hugging Face Space, [`jfrick/crescent-moon`](https://huggingface.co/spaces/jfrick/crescent-moon)
+(`space/app.py`, Gradio on ZeroGPU; `scripts/push_space.py` pushes it). It compares
+detectors on images (uploaded, or 16 examples: COCO val images and Objects365 images no
+labeller saw), runs one model on every n-th frame of a video, streaming the annotated
+video back in two-second H.264 chunks, and detects live on a camera or a video file
+(`space/camera.html`). Slot-head boxes are labelled with their score, objectness × label
+confidence × (box confidence)^0.25: a ranking score, not a probability. Moondream gives
+no confidence, so its boxes carry only the label. The models and thresholds are in
+`space/demo.json`: Moondream 2's `detect` and four slot heads on the Space's GPU, and
+the 4-bit detector in the visitor's browser ([`webgpu.md`](webgpu.md)), which is the
+camera tab's first choice. For the Space's models the camera page sends one frame at a
+time, downscaled to 640 pixels, through the `frame` API, and the next only once the
+answer is back; tracking runs per stream on the Space. ZeroGPU attaches a GPU per call
+and counts it against the visitor: through the API with a token, a frame took 0.9 to
+4.9 s round trip and an image comparison 0.20 s for the rank-64 head (0.41 s for
+Moondream 2 on seven categories); a visitor who is not signed in gets no GPU time for
+them. Moondream 3.1 runs through Photon, which needs a GPU of its own when it loads,
+so it is not in the Space.
 
-Measured through the page on one warm L40S per model family:
+The demo ran on Modal before (two L40S containers, Moondream 3.1 included, a web
+container tracking camera streams). With the rank-64 fast head and a warm GPU, a camera
+frame took 0.095 s on the GPU and 0.124 s through the web server there, measured with a
+browser's simulated camera.
+
+Measured through that page on one warm L40S per model family:
 
 | Request | Moondream 2 | Slot head, rank 128 | Moondream 3.1 |
 |---|---|---|---|
