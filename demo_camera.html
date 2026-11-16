@@ -117,8 +117,7 @@ function loadLocal() {
     const model = await runtime.loadModel(new URL(config.device.weights, location.href), (done, total) => {
       $("progress").value = done / total;
       $("downloadText").textContent = `${megabytes(done)} of ${megabytes(total)} MB`;
-    });
-    $("downloadText").textContent = "Preparing the detector on the GPU";
+    }, (text) => { $("progress").hidden = true; $("downloadText").textContent = text; });
     model.device.lost.then((info) => {
       local = null; loadingLocal = null; $("download").disabled = false; $("progress").hidden = true; $("downloadText").textContent = "";
       if (!onDevice()) return;

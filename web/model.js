@@ -361,69 +361,110 @@ export async function requestDevice(features = []) {
   return adapter.requestDevice({ requiredLimits, requiredFeatures });
 }
 
-// The fastest of the kernels' CHOICES on this device: each is timed on the work of one
-// decoder block (its MLP's first product and its attention, over as many rows as a frame
-// has, on zeros). Returns { outs, rows, queries, seconds: { choice: seconds } }.
-export async function tune(device, manifest, tensors) {
+// The fastest of the kernels' CHOICES on this device, timed on the work of one decoder
+// block (its MLP's first product and its attention, over as many rows as a frame has, on
+// zeros). A GPU speeds up over its first seconds of work, so the choices are timed in
+// rounds, one after the other, and a choice's time is its fastest round. Choices are
+// compiled during the first half of `budget` seconds (the default first; those not
+// reached are left out) and rounds run for the second half, three at least; the default
+// stays unless another choice is over 5% faster. A GPU that
+// needs over `slow` seconds for one product keeps the default untimed.
+// Returns { outs, rows, queries, rounds, seconds: { choice: seconds } }.
+export async function tune(device, manifest, tensors, { budget = 6, slow = 0.25 } = {}) {
   const T = TEXT;
   const rows = 1 + Math.ceil(GRID / manifest.head.prefix_pool) ** 2
     + manifest.head.slots * (manifest.selection.coordinates + manifest.head.label_tokens);
   const x = storage(device, rows * T.dim * 4), hidden = storage(device, rows * T.hidden * 4);
   const qkv = storage(device, rows * 3 * T.dim * 4);
   const layer = tensors["text.blocks.0.mlp.fc1"];
-  const seconds = {};
-  const REPEATS = 8;
-  const time = async (name, make) => {
-    let best = Infinity;
-    for (let run = 0; run < 4; run++) {  // the first run also compiles the kernel
-      const start = performance.now();
-      device.queue.submit([encode(device, Array.from({ length: REPEATS }, make))]);
-      await device.queue.onSubmittedWorkDone();
-      if (run) best = Math.min(best, (performance.now() - start) / 1000 / REPEATS);
-    }
-    seconds[name] = best;
-    return best;
+  const now = () => performance.now() / 1000;
+  const time = async (make, repeats) => {
+    const start = now();
+    device.queue.submit([encode(device, Array.from({ length: repeats }, make))]);
+    await device.queue.onSubmittedWorkDone();
+    return (now() - start) / repeats;
   };
-  // The weights' first use is slow on some devices; keep it out of the first choice.
-  await time("first use", () => new Kernels(device).quantisedLinear(layer.bits, x, layer, hidden,
-    { rows, xStride: T.dim, yStride: T.hidden }));
-  const fastest = async (choices, name, make) => {
-    const timed = [];
-    for (const choice of choices) timed.push([await time(name(choice), make(choice)), choice]);
-    return timed.reduce((a, b) => (b[0] < a[0] ? b : a))[1];
+  const product = (tuning) => {
+    const kernels = new Kernels(device, tuning);
+    return () => kernels.quantisedLinear(layer.bits, x, layer, hidden,
+      { rows, xStride: T.dim, yStride: T.hidden });
   };
-  const [outs, tileRows] = await fastest(CHOICES.tiles, ([o, r]) => `product ${o} x ${r}`,
-    ([o, r]) => {
-      const kernels = new Kernels(device, { ...TUNING, outs: o, rows: r });
-      return () => kernels.quantisedLinear(layer.bits, x, layer, hidden,
-        { rows, xStride: T.dim, yStride: T.hidden });
-    });
-  const queries = await fastest(CHOICES.queries, (n) => `attention ${n}`, (n) => {
-    const kernels = new Kernels(device, { ...TUNING, queries: n });
+  const attention = (tuning) => {
+    const kernels = new Kernels(device, tuning);
     return () => kernels.attention(qkv, x,
       { rows, stride: 3 * T.dim, dim: T.dim, heads: T.heads, yStride: T.dim });
-  });
+  };
+  const candidates = [
+    ...CHOICES.tiles.map(([outs, r]) => ({
+      kind: "product", name: `product ${outs} x ${r}`, set: { outs, rows: r },
+      make: product({ ...TUNING, outs, rows: r }),
+    })),
+    ...CHOICES.queries.map((queries) => ({
+      kind: "attention", name: `attention ${queries}`, set: { queries },
+      make: attention({ ...TUNING, queries }),
+    })),
+  ];
+  const seconds = {}, started = now();
+  let chosen = { ...TUNING }, rounds = 0;
+  // The weights' first use is slow on some devices; it stays out of the times.
+  seconds["first use"] = await time(product(TUNING), 1);
+  if (await time(product(TUNING), 1) <= slow) {
+    // Compile: the defaults lead CHOICES, and each kind gets half of the compile time.
+    const ready = [];
+    for (const kind of ["product", "attention"]) {
+      const end = now() + budget / 4;
+      for (const candidate of candidates.filter((c) => c.kind === kind)) {
+        if (ready.some((c) => c.kind === kind) && now() > end) break;
+        await time(candidate.make, 1);
+        ready.push(candidate);
+      }
+    }
+    for (const candidate of ready) candidate.best = Infinity;
+    while (rounds < 3 || now() - started < budget) {
+      for (const candidate of ready) {
+        candidate.best = Math.min(candidate.best, await time(candidate.make, 4));
+      }
+      rounds++;
+    }
+    for (const kind of ["product", "attention"]) {
+      // The default (first) stays unless another choice is over 5% faster.
+      const [first, ...others] = ready.filter((c) => c.kind === kind);
+      const best = others.reduce((a, c) => (c.best < a.best ? c : a), first);
+      if (best.best < 0.95 * first.best) chosen = { ...chosen, ...best.set };
+    }
+    for (const candidate of ready) seconds[candidate.name] = candidate.best;
+  }
   for (const buffer of [x, hidden, qkv]) buffer.destroy();
-  return { outs, rows: tileRows, queries, seconds };
+  return { ...chosen, rounds, seconds };
 }
 
-// `tune`, remembered in this browser (the choice belongs to the device's GPU).
+// `tune`, remembered in this browser (the choice belongs to the device's GPU). A device
+// on which the timing fails runs the default kernels.
 async function tuned(device, manifest, tensors) {
-  const key = `crescent-moon-tuning-${manifest.head.prefix_pool}-${JSON.stringify(CHOICES)}`;
+  const key = `crescent-moon-tuning-3-${manifest.head.prefix_pool}-${JSON.stringify(CHOICES)}`;
   try {
     const kept = JSON.parse(localStorage.getItem(key));
     if (kept) return kept;
   } catch { /* no storage, or nothing usable in it: measure */ }
-  const tuning = await tune(device, manifest, tensors);
+  let tuning;
+  try {
+    tuning = await tune(device, manifest, tensors);
+  } catch (error) {
+    return { ...TUNING, seconds: {}, error: String(error) };
+  }
   try { localStorage.setItem(key, JSON.stringify(tuning)); } catch { /* not kept */ }
   return tuning;
 }
 
-export async function loadModel(base, progress) {
+// `progress(done, total)` follows the download in bytes; `stage(text)` names what follows.
+export async function loadModel(base, progress, stage = () => {}) {
   const device = await requestDevice();
   const manifest = await (await fetch(new URL("manifest.json", base))).json();
   const tensors = await loadWeights(device, base, manifest, progress);
-  return new SlotModel(device, manifest, tensors, await tuned(device, manifest, tensors));
+  stage("Choosing the fastest kernels for this GPU");
+  const tuning = await tuned(device, manifest, tensors);
+  stage("Preparing the detector on the GPU");
+  return new SlotModel(device, manifest, tensors, tuning);
 }
 
 export { CROP };

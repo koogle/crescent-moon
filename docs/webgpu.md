@@ -130,11 +130,18 @@ image positions in the prefix, which means training a head for it) or cheaper ar
 `tune` in `web/model.js` times each of the kernels' `CHOICES` (six tiles of the quantised
 product, attention with 1, 2 or 4 query rows) on the work of one decoder block when the
 model loads, builds the pass with the fastest, and `loadModel` keeps the choice in the
-browser's local storage. The camera page shows the choice under the Model list. On the
-L4 it takes 5.4 s and picks 4 x 16 and 2 query rows (run `web-bench-tune-003`; seconds
-per product: 4 x 16 0.0043, 8 x 8 0.0044, 4 x 8 0.0049, 2 x 16 0.0053, 2 x 8 0.0057,
-4 x 4 0.0059; per attention: 2 rows 0.0077, 1 row 0.0106, 4 rows 0.0194). Every choice is
-checked by `web/tests/kernels.test.js`. No measurement on a phone yet.
+browser's local storage. The camera page names the step while it runs and shows the
+choice afterwards. The timing takes about 6 s: the choices are timed in rounds, one
+after the other, and a choice's time is its fastest round, because a GPU speeds up over
+its first seconds of work. Timing each choice once, in order, measured that warm-up
+instead: run `web-bench-tune-004` chose 2 x 8 and one query row, and its frame took
+1.01 s. The default stays unless another choice is over 5% faster, a GPU that needs over
+0.25 s for one product keeps the default untimed, and so does one on which the timing
+fails. On the L4 the rounds pick 4 x 16 and 2 query rows (run `web-bench-tune-005`;
+seconds per product: 4 x 16 0.0039, 4 x 8 0.0042, 8 x 8 0.0045, 2 x 16 0.0050, 2 x 8
+0.0053, 4 x 4 0.0053; per attention: 2 rows 0.0098, 1 row 0.0115, 4 rows 0.0194) and the
+frame takes 0.783 s. Every choice is checked by `web/tests/kernels.test.js`. No
+measurement on a phone yet.
 
 With these kernels the pass matches the PyTorch reference on the L4 on all three images
 (36 of 36 checks; run `web-bench-final-l4`, and `web-bench-norm4-001` with the vec4 layer
