@@ -1,0 +1,52 @@
+# The browser runtime's suites on an Apple GPU: Chromium (Metal) and WebKit, Safari's
+# engine, on a macOS runner, against an export from the HF model repository. Started by
+# hand; the suites' logs and result files are the output.
+name: Browser runtime on Apple
+on:
+  workflow_dispatch:
+    inputs:
+      export:
+        description: Export under web/ in jfrick/crescent-moon
+        default: slots-teacher-coco-rank64-w4
+      suites:
+        description: Suites of web/tests, separated by spaces
+        default: kernels bench reference
+      frames:
+        description: Frames the bench suite times
+        default: "6"
+permissions:
+  contents: read
+jobs:
+  suites:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install ${{ matrix.browser }}
+      - run: system_profiler SPDisplaysDataType SPHardwareDataType | grep -E "Chip|Memory|Chipset|Metal|Cores" || true
+      - name: Download the export
+        run: |
+          python3 -m venv .hf && .hf/bin/pip install -q huggingface_hub
+          .hf/bin/hf download jfrick/crescent-moon --include "web/${{ inputs.export }}/*" --local-dir artifacts/hf
+      - name: Run the suites
+        run: |
+          mkdir -p artifacts/apple
+          status=0
+          for suite in ${{ inputs.suites }}; do
+            node web/tests/run.cjs "$suite" --gpu metal --browser ${{ matrix.browser }} \
+              --export "artifacts/hf/web/${{ inputs.export }}" --frames ${{ inputs.frames }} \
+              --timeout 12 --out "artifacts/apple/$suite.json" || status=1
+          done
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apple-${{ matrix.browser }}
+          path: artifacts/apple
