@@ -372,7 +372,7 @@ export async function requestDevice(features = []) {
 // stays unless another choice is over 5% faster. A GPU that
 // needs over `slow` seconds for one product keeps the default untimed.
 // Returns { outs, rows, queries, rounds, seconds: { choice: seconds } }.
-export async function tune(device, manifest, tensors, { budget = 6, slow = 0.25 } = {}) {
+export async function tune(device, manifest, tensors, { budget = 10, slow = 0.25 } = {}) {
   const T = TEXT;
   const rows = 1 + Math.ceil(GRID / manifest.head.prefix_pool) ** 2
     + manifest.head.slots * (manifest.selection.coordinates + manifest.head.label_tokens);
@@ -443,7 +443,7 @@ export async function tune(device, manifest, tensors, { budget = 6, slow = 0.25 
 // `tune`, remembered in this browser (the choice belongs to the device's GPU). A device
 // on which the timing fails runs the default kernels.
 async function tuned(device, manifest, tensors) {
-  const key = `crescent-moon-tuning-3-${manifest.head.prefix_pool}-${JSON.stringify(CHOICES)}`;
+  const key = `crescent-moon-tuning-4-${manifest.head.prefix_pool}-${JSON.stringify(CHOICES)}`;
   try {
     const kept = JSON.parse(localStorage.getItem(key));
     if (kept) return kept;

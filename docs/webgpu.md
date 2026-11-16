@@ -140,8 +140,16 @@ instead: run `web-bench-tune-004` chose 2 x 8 and one query row, and its frame t
 fails. On the L4 the rounds pick 4 x 16 and 2 query rows (run `web-bench-tune-005`;
 seconds per product: 4 x 16 0.0039, 4 x 8 0.0042, 8 x 8 0.0045, 2 x 16 0.0050, 2 x 8
 0.0053, 4 x 4 0.0053; per attention: 2 rows 0.0098, 1 row 0.0115, 4 rows 0.0194) and the
-frame takes 0.783 s. Every choice is checked by `web/tests/kernels.test.js`. No
-measurement on a phone yet.
+frame takes 0.783 s. Every choice is checked by `web/tests/kernels.test.js`.
+
+A phone's first report is about 10 s per frame (no stage times yet), against 0.78 s on
+the L4. On a phone memory traffic is a likely limit: per output, a tile reads 4 K / outs
+bytes of activations and K / (2 rows) bytes of weights (K inputs), so the choices now
+include wide tiles (16 x 4, 8 x 4, 32 x 4, 16 x 8) that read a third of what 4 x 16
+does, and the timing budget is 10 s. On the L4 4 x 16 stays fastest (run
+`web-bench-tiles-001`: 4 x 16 0.0038 s, 8 x 8 0.0044, 8 x 4 0.0045, 16 x 8 0.0047,
+16 x 4 0.0049, 32 x 4 0.0094). The camera page lists the GPU, every choice's time and
+the latest frames' stage times under "Timings on this device".
 
 With these kernels the pass matches the PyTorch reference on the L4 on all three images
 (36 of 36 checks; run `web-bench-final-l4`, and `web-bench-norm4-001` with the vec4 layer

@@ -29,6 +29,8 @@
     padding: 16px; text-align: center; line-height: 1.4; font-size: 15px; color: white;
     background: rgba(0, 0, 0, 0.55); pointer-events: none; }
   #status { margin-top: 8px; color: var(--muted); min-height: 1.4em; }
+  details { margin-top: 8px; color: var(--muted); }
+  details pre { margin: 6px 0 0; font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -48,6 +50,7 @@
 <div class="stage"><video id="video" muted playsinline autoplay></video><canvas id="overlay"></canvas>
   <div id="notice" hidden></div></div>
 <div id="status">The camera plays live; boxes from the last detected frame are drawn over it.</div>
+<details id="diagnostics" hidden><summary>Timings on this device</summary><pre id="timings"></pre></details>
 <script>
 const $ = (id) => document.getElementById(id);
 
@@ -147,12 +150,31 @@ function loadLocal() {
     $("progress").hidden = true;
     const { outs, rows, queries } = model.tuning;
     $("downloadText").textContent = `Detector loaded. Fastest kernels on this GPU: products ${outs} x ${rows}, attention ${queries}`;
+    showTimings();
     return local;
   })().catch((error) => {
     loadingLocal = null; $("progress").hidden = true; $("downloadText").textContent = "";
     throw error;
   });
   return loadingLocal;
+}
+
+// What the detector in this browser measured: the GPU, each kernel choice timed while
+// loading, and the stages of the latest frames.
+function showTimings(seconds) {
+  const model = local.model, info = model.device.adapterInfo || {};
+  const ms = (value) => `${(value * 1000).toFixed(1)} ms`;
+  const { outs, rows, queries, seconds: timed = {}, rounds, error } = model.tuning;
+  if (seconds) local.frames = [...(local.frames || []), seconds].slice(-5);
+  const lines = [
+    `GPU: ${[info.vendor, info.architecture, info.device, info.description].filter(Boolean).join(", ") || "not named"}`,
+    `Kernels: products ${outs} x ${rows}, attention ${queries}`
+      + (error ? ` (default; timing failed: ${error})` : rounds ? ` (fastest of ${rounds} rounds)` : " (default, not timed)"),
+    ...Object.entries(timed).map(([name, value]) => `  ${name}: ${ms(value)}`),
+    ...(local.frames || []).map((frame) => "Frame: " + Object.entries(frame).map(([name, value]) => `${name} ${ms(value)}`).join(", ")),
+  ];
+  $("timings").textContent = lines.join("\n");
+  $("diagnostics").hidden = false;
 }
 
 function colourOf(label) {
@@ -177,6 +199,7 @@ async function detectLocal(w, h, mine) {
   const total = (performance.now() - started) / 1000;
   if (mine !== run) return;
   boxes = found.map((b) => ({ ...b, colour: colourOf(b.label) })); scale = 1;
+  showTimings(seconds);
   if (!local.warm) {
     local.warm = true;
     status.textContent = `On this device: the first frame took ${total.toFixed(1)} s, most of it preparation; the next ones show the speed.`;
