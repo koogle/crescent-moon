@@ -27,7 +27,8 @@ function halfToFloat(bytes, count) {
 
 // Fetches a shard, from the browser's cache when it is there. `version` identifies the
 // shard's content: a cached copy of the same file with another version is replaced.
-async function fetchShard(url, version, onBytes) {
+// The shard is read into one array of its `size`, so memory holds it once.
+async function fetchShard(url, version, size, onBytes) {
   const cache = "caches" in globalThis ? await caches.open("crescent-moon-weights") : null;
   const key = `${url}?v=${version}`;
   let response = cache && await cache.match(key);
@@ -44,18 +45,17 @@ async function fetchShard(url, version, onBytes) {
     }
   }
   const reader = response.body.getReader();
-  const chunks = [];
-  let total = 0;
+  const bytes = new Uint8Array(size);
+  let at = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    chunks.push(value);
-    total += value.byteLength;
+    if (at + value.byteLength > size) throw new Error(`${url}: longer than its ${size} bytes`);
+    bytes.set(value, at);
+    at += value.byteLength;
     onBytes(value.byteLength);
   }
-  const bytes = new Uint8Array(total);
-  let at = 0;
-  for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.byteLength; }
+  if (at < size) throw new Error(`${url}: ${at} of ${size} bytes`);
   return bytes;
 }
 
@@ -73,8 +73,10 @@ export async function loadWeights(device, base, manifest, progress = () => {}) {
   let loaded = 0;
   const tensors = {};
   for (let shard = 0; shard < manifest.shards.length; shard++) {
-    const version = places.find((p) => p.place.shard === shard).place.sha256.slice(0, 16);
-    const bytes = await fetchShard(new URL(manifest.shards[shard], base).href, version, (n) => {
+    const inShard = places.filter((p) => p.place.shard === shard);
+    const version = inShard[0].place.sha256.slice(0, 16);
+    const size = Math.max(...inShard.map((p) => p.place.offset + p.place.bytes));
+    const bytes = await fetchShard(new URL(manifest.shards[shard], base).href, version, size, (n) => {
       loaded += n;
       progress(loaded, total);
     });
@@ -464,7 +466,10 @@ export async function loadModel(base, progress, stage = () => {}) {
   stage("Choosing the fastest kernels for this GPU");
   const tuning = await tuned(device, manifest, tensors);
   stage("Preparing the detector on the GPU");
-  return new SlotModel(device, manifest, tensors, tuning);
+  const model = new SlotModel(device, manifest, tensors, tuning);
+  const problems = await model.kernels.problems();
+  if (problems.length) throw new Error(`This browser rejected a kernel: ${problems[0]}`);
+  return model;
 }
 
 export { CROP };

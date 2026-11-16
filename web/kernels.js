@@ -343,16 +343,29 @@ export class Kernels {
     this.device = device;
     this.tuning = tuning;
     this.pipelines = new Map();
+    this.modules = new Map();
   }
 
   pipeline(key, source) {
     if (!this.pipelines.has(key)) {
       const module = this.device.createShaderModule({ code: source, label: key });
+      this.modules.set(key, module);
       this.pipelines.set(key, this.device.createComputePipeline({
         label: key, layout: "auto", compute: { module, entryPoint: "main" },
       }));
     }
     return this.pipelines.get(key);
+  }
+
+  // Compilation errors of the kernels used so far, as "kernel: message (line)".
+  async problems() {
+    const found = [];
+    for (const [key, module] of this.modules) {
+      for (const message of (await module.getCompilationInfo()).messages) {
+        if (message.type === "error") found.push(`${key}: ${message.message} (line ${message.lineNum})`);
+      }
+    }
+    return found;
   }
 
   step(key, source, fields, values, buffers, dispatch) {
