@@ -12,10 +12,10 @@ const GROUP = 32; // weights per scale
 // on an NVIDIA L4; CHOICES are what `tune` in model.js times on the device in use.
 export const TUNING = { outs: 4, rows: 16, queries: 2, half: false };
 export const CHOICES = {
-  // Per output, a tile reads 4 K / outs bytes of activations and K / (2 rows) bytes of
-  // weights (K inputs): wide tiles read least, which counts where memory is the limit.
-  tiles: [[4, 16], [16, 4], [8, 8], [8, 4], [4, 8], [32, 4], [16, 8], [2, 16], [4, 4]],
-  queries: [2, 1, 4],
+  // An NVIDIA L4 is fastest with 4 x 16 and an Apple GPU with 4 x 4, where 4 x 16 takes
+  // 5.5 times as long: a tile's sums have to fit the GPU's registers.
+  tiles: [[4, 16], [4, 4], [8, 4], [2, 16], [4, 8], [2, 8], [2, 4], [8, 8]],
+  queries: [2, 4, 8, 1],
 };
 const FIELDS = {};
 

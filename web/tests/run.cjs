@@ -3,7 +3,7 @@
 //   node web/tests/run.cjs kernels
 //   node web/tests/run.cjs reference --export artifacts/web/NAME [--image STEM] [--timeout MINUTES]
 //   node web/tests/run.cjs bench --export artifacts/web/NAME [--frames N] --gpu vulkan
-//       [--budget SECONDS] [--slow SECONDS]   (the limits of the kernel timing, see tune)
+//       [--budget SECONDS] [--slow SECONDS] [--half 1]   (options of the kernel timing, see tune)
 //
 // Serves the repository root on a local port, opens web/tests/index.html and prints the
 // page's log. `--gpu swiftshader` (the default) runs WebGPU on the CPU, for correctness
@@ -42,7 +42,7 @@ function serve(request, response) {
   const query = new URLSearchParams({ suite });
   if (options.export) query.set("export", `/${options.export.replace(/\/$/, "")}/`);
   if (options.image) query.set("image", options.image);
-  for (const name of ["frames", "budget", "slow"]) if (options[name]) query.set(name, options[name]);
+  for (const name of ["frames", "budget", "slow", "half"]) if (options[name]) query.set(name, options[name]);
   const adapters = {
     swiftshader: { args: ["--use-webgpu-adapter=swiftshader", "--enable-features=Vulkan", "--use-angle=swiftshader"] },
     // The full browser in its new headless mode; the headless shell has no GPU process.

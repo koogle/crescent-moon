@@ -27,7 +27,7 @@ export async function run(query, log) {
   log(`loaded in ${load.toFixed(1)} s`);
   const tuneStarted = performance.now();
   const limits = {};
-  for (const name of ["budget", "slow"]) if (query.get(name)) limits[name] = Number(query.get(name));
+  for (const name of ["budget", "slow", "half"]) if (query.get(name)) limits[name] = Number(query.get(name));
   const tuning = await tune(device, manifest, tensors, limits);
   const tuneSeconds = (performance.now() - tuneStarted) / 1000;
   log(`tuned in ${tuneSeconds.toFixed(1)} s: ${JSON.stringify(tuning)}`);
