@@ -1,8 +1,11 @@
 # The browser runtime's suites on an Apple GPU: Chromium (Metal) and WebKit, Safari's
 # engine, on a macOS runner, against an export from the HF model repository. Started by
-# hand; the suites' logs and result files are the output.
+# hand, or by a push to a jf-claude/ branch; the suites' logs and result files are the
+# output.
 name: Browser runtime on Apple
 on:
+  push:
+    branches: ["jf-claude/**"]
   workflow_dispatch:
     inputs:
       export:
@@ -16,6 +19,10 @@ on:
         default: "6"
 permissions:
   contents: read
+env:
+  EXPORT: ${{ inputs.export || 'slots-teacher-coco-rank64-w4' }}
+  SUITES: ${{ inputs.suites || 'kernels bench reference' }}
+  FRAMES: ${{ inputs.frames || '6' }}
 jobs:
   suites:
     strategy:
@@ -34,14 +41,14 @@ jobs:
       - name: Download the export
         run: |
           python3 -m venv .hf && .hf/bin/pip install -q huggingface_hub
-          .hf/bin/hf download jfrick/crescent-moon --include "web/${{ inputs.export }}/*" --local-dir artifacts/hf
+          .hf/bin/hf download jfrick/crescent-moon --include "web/$EXPORT/*" --local-dir artifacts/hf
       - name: Run the suites
         run: |
           mkdir -p artifacts/apple
           status=0
-          for suite in ${{ inputs.suites }}; do
+          for suite in $SUITES; do
             node web/tests/run.cjs "$suite" --gpu metal --browser ${{ matrix.browser }} \
-              --export "artifacts/hf/web/${{ inputs.export }}" --frames ${{ inputs.frames }} \
+              --export "artifacts/hf/web/$EXPORT" --frames "$FRAMES" \
               --timeout 12 --out "artifacts/apple/$suite.json" || status=1
           done
           exit $status
