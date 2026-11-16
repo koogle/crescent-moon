@@ -112,12 +112,13 @@ median of warm frames, seconds per frame (runs `web-bench-*` on the volume under
 | vec4 loads and dot products, 8 rows per invocation | 0.252 | 0.960 | 1.259 |
 | A tile of 4 outputs x 16 rows per invocation | 0.171 | 0.662 | 0.868 |
 | The same, and attention sharing key and value loads between 2 query rows | 0.166 | 0.600 | 0.801 |
+| The same, and layer norm on vec4s | 0.152 | 0.598 | 0.783 |
 
 Other tiles of the matrix product (outputs x rows): 4 x 8 0.983, 8 x 8 0.907, 2 x 16 1.049,
 8 x 16 1.116 s. Attention with 4 or 8 query rows per invocation is slower than with one
 (1.40 and 1.36 s): its per-row state no longer fits in registers.
 
-GPU seconds per kernel in the last row: the decoder's quantised products 0.343, its
+GPU seconds per kernel in the fourth row: the decoder's quantised products 0.343, its
 attention 0.181, adapters 0.042, layer norm 0.023; the vision encoder's products 0.075,
 attention 0.057, layer norm 0.028. The decoder's products are 2.5 TFLOP, so they run at
 about 7 TFLOPS, close to what an L4 does in FP32; what is left to gain on this GPU is
@@ -126,7 +127,8 @@ image positions in the prefix, which means training a head for it) or cheaper ar
 (FP16 where a GPU is faster with it).
 
 With these kernels the pass matches the PyTorch reference on the L4 on all three images
-(36 of 36 checks; run `web-bench-final-l4`).
+(36 of 36 checks; run `web-bench-final-l4`, and `web-bench-norm4-001` with the vec4 layer
+norm, which takes 0.011 GPU seconds per frame in place of 0.051).
 
 Tried on attention after that, each measured on the L4 and none faster than the 0.80 s
 above: straight-line code over named vec4s instead of local arrays (0.79 s with 2 query

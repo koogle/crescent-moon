@@ -106,7 +106,7 @@ async function half(device, kernels, { rows, ins, outs, add, xRow0, yRow0 }) {
 
 async function norm(device, kernels, { rows, dim, yCol0 }) {
   const rand = random(rows + dim);
-  const xStride = dim + 4, yStride = dim + yCol0 + 3;
+  const xStride = dim + 4, yStride = dim + yCol0 + 4;
   const x = floats(rand, (1 + rows) * xStride, 3), weight = floats(rand, dim), bias = floats(rand, dim);
   const y0 = floats(rand, (2 + rows) * yStride), want = y0.slice();
   for (let r = 0; r < rows; r++) {
@@ -230,7 +230,7 @@ export async function run(query, log) {
     ["half linear", () => half(device, kernels, { rows: 7, ins: 64, outs: 11, add: false, xRow0: 0, yRow0: 0 })],
     ["half linear, add into offset rows", () => half(device, kernels, { rows: 6, ins: 10, outs: 70, add: true, xRow0: 2, yRow0: 3 })],
     ["layer norm", () => norm(device, kernels, { rows: 70, dim: 96, yCol0: 0 })],
-    ["layer norm into offset columns", () => norm(device, kernels, { rows: 3, dim: 50, yCol0: 7 })],
+    ["layer norm into offset columns", () => norm(device, kernels, { rows: 3, dim: 52, yCol0: 8 })],
     ["GELU in place", () => geluKernel(device, kernels, { first: 5, count: 40000 })],
     ["rotary", () => rotaryKernel(device, kernels, { rows: 11, stride: 3 * 128, dim: 128, heads: 2, position0: 3 })],
     ["attention, head width 64, prefix", () => attentionKernel(device, kernels, { rows: 13, dim: 128, heads: 2, prefix: 8 })],

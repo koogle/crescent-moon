@@ -133,26 +133,28 @@ ${WRITE4("if ((p.flags & 1u) != 0u) { y[at] += total[k]; } else { y[at] = total[
 FIELDS.halfLinear = ["rows", "x_row0", "x_stride", "ins", "outs", "y_row0", "y_stride", "y_col0",
   "flags"];
 
-// y[row] = (x[row] - mean) / sqrt(variance + 1e-5) * weight + bias over `dim` columns.
+// y[row] = (x[row] - mean) / sqrt(variance + 1e-5) * weight + bias over `dim` columns,
+// four columns at a time: strides, `dim` and `y_col0` are multiples of 4.
 export const layerNorm = `
 struct P { rows: u32, x_row0: u32, x_stride: u32, dim: u32, y_row0: u32, y_stride: u32, y_col0: u32 }
 @group(0) @binding(0) var<uniform> p: P;
-@group(0) @binding(1) var<storage, read> x: array<f32>;
-@group(0) @binding(2) var<storage, read> weight: array<f32>;
-@group(0) @binding(3) var<storage, read> bias: array<f32>;
-@group(0) @binding(4) var<storage, read_write> y: array<f32>;
+@group(0) @binding(1) var<storage, read> x: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read> weight: array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read> bias: array<vec4<f32>>;
+@group(0) @binding(4) var<storage, read_write> y: array<vec4<f32>>;
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= p.rows) { return; }
-  let src = (p.x_row0 + id.x) * p.x_stride;
-  var sum = 0.0;
-  for (var i = 0u; i < p.dim; i++) { sum += x[src + i]; }
-  let mean = sum / f32(p.dim);
-  var squares = 0.0;
-  for (var i = 0u; i < p.dim; i++) { let d = x[src + i] - mean; squares += d * d; }
-  let scale = inverseSqrt(squares / f32(p.dim) + 1e-5);
-  let to = (p.y_row0 + id.x) * p.y_stride + p.y_col0;
-  for (var i = 0u; i < p.dim; i++) { y[to + i] = (x[src + i] - mean) * scale * weight[i] + bias[i]; }
+  let src = ((p.x_row0 + id.x) * p.x_stride) >> 2u;
+  let n = p.dim >> 2u;
+  var sum = vec4<f32>(0.0);
+  for (var i = 0u; i < n; i++) { sum += x[src + i]; }
+  let mean = (sum.x + sum.y + sum.z + sum.w) / f32(p.dim);
+  var squares = vec4<f32>(0.0);
+  for (var i = 0u; i < n; i++) { let d = x[src + i] - mean; squares += d * d; }
+  let scale = inverseSqrt((squares.x + squares.y + squares.z + squares.w) / f32(p.dim) + 1e-5);
+  let to = ((p.y_row0 + id.x) * p.y_stride + p.y_col0) >> 2u;
+  for (var i = 0u; i < n; i++) { y[to + i] = (x[src + i] - mean) * scale * weight[i] + bias[i]; }
 }`;
 FIELDS.layerNorm = ["rows", "x_row0", "x_stride", "dim", "y_row0", "y_stride", "y_col0"];
 
@@ -387,6 +389,9 @@ export class Kernels {
   }
 
   layerNorm(x, weight, bias, y, v) {
+    if ([v.xStride, v.dim, v.yStride, v.yCol0 ?? 0].some((n) => n % 4)) {
+      throw new Error("Layer norm reads and writes four columns at a time");
+    }
     const values = {
       rows: v.rows, x_row0: v.xRow0 ?? 0, x_stride: v.xStride, dim: v.dim,
       y_row0: v.yRow0 ?? 0, y_stride: v.yStride, y_col0: v.yCol0 ?? 0,
