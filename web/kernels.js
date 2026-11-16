@@ -10,7 +10,7 @@ const GROUP = 32; // weights per scale
 // Work per invocation: the tile of the quantised product (outputs by token rows; rows
 // a multiple of 4) and the query rows of one head in attention. TUNING is the fastest
 // on an NVIDIA L4; CHOICES are what `tune` in model.js times on the device in use.
-export const TUNING = { outs: 4, rows: 16, queries: 2 };
+export const TUNING = { outs: 4, rows: 16, queries: 2, half: false };
 export const CHOICES = {
   // Per output, a tile reads 4 K / outs bytes of activations and K / (2 rows) bytes of
   // weights (K inputs): wide tiles read least, which counts where memory is the limit.
@@ -42,18 +42,21 @@ const WRITE4 = (value) => `
     }
   }`;
 
-export function quantisedLinear(bits, OUTS = TUNING.outs, ROWS = TUNING.rows) {
+export function quantisedLinear(bits, OUTS = TUNING.outs, ROWS = TUNING.rows, half = false) {
   // A word holds 32 / bits weights; they are decoded four at a time into a vec4 and
   // multiplied with four columns of a row in one dot product. One invocation computes a
   // tile of OUTS outputs by ROWS rows, so each input vec4 is loaded once for OUTS outputs
-  // and each weight word is decoded once for ROWS rows.
+  // and each weight word is decoded once for ROWS rows. With `half` (the device's
+  // shader-f16 feature) the products of one weight word are computed and summed in f16,
+  // which some GPUs do faster, and the sums over words are kept in f32.
   const perWord = 32 / bits, words = GROUP / perWord, quads = perWord / 4, shift = 32 - bits;
   const outs = [...Array(OUTS).keys()], fours = [...Array(ROWS / 4).keys()], qs = [...Array(quads).keys()];
   const lines = (items, make) => items.map(make).join("\n");
   const ups = (q) => [0, 1, 2, 3].map((j) => `${shift - bits * (4 * q + j)}u`).join(", ");
-  const sum = (i, h) => `vec4<f32>(${[0, 1, 2, 3].map((j) =>
-    qs.map((q) => `dot(d${i}_${q}, x${4 * h + j}_${q})`).join(" + ")).join(", ")})`;
-  return `
+  const F = half ? "f16" : "f32";
+  const sum = (i, h) => `vec4<f32>(vec4<${F}>(${[0, 1, 2, 3].map((j) =>
+    qs.map((q) => `dot(d${i}_${q}, x${4 * h + j}_${q})`).join(" + ")).join(", ")}))`;
+  return `${half ? "enable f16;" : ""}
 struct P { rows: u32, x_row0: u32, x_stride: u32, groups: u32,
            outs: u32, y_row0: u32, y_stride: u32, y_col0: u32,
            scale_stride: u32, flags: u32, out0: u32, pad: u32 }
@@ -91,9 +94,9 @@ ${lines(fours, (h) => `  var t${i}_${h} = vec4<f32>(0.0);`)}`)}
 ${lines(outs, (i) => lines(fours, (h) => `    var a${i}_${h} = vec4<f32>(0.0);`))}
     for (var k = 0u; k < ${words}u; k++) {
       let c = g * ${GROUP / 4}u + k * ${quads}u;
-${lines([...Array(ROWS).keys()], (r) => lines(qs, (q) => `      let x${r}_${q} = x[r${r} + c + ${q}u];`))}
+${lines([...Array(ROWS).keys()], (r) => lines(qs, (q) => `      let x${r}_${q} = vec4<${F}>(x[r${r} + c + ${q}u]);`))}
 ${lines(outs, (i) => `      let word${i} = w[w${i} + k];
-${lines(qs, (q) => `      let d${i}_${q} = vec4<f32>(bitcast<vec4<i32>>(vec4<u32>(word${i}) << vec4<u32>(${ups(q)})) >> vec4<u32>(${shift}u));`)}
+${lines(qs, (q) => `      let d${i}_${q} = vec4<${F}>(bitcast<vec4<i32>>(vec4<u32>(word${i}) << vec4<u32>(${ups(q)})) >> vec4<u32>(${shift}u));`)}
 ${lines(fours, (h) => `      a${i}_${h} += ${sum(i, h)};`)}`)}
     }
 ${lines(outs, (i) => `    w${i} += ${words}u;
@@ -395,8 +398,8 @@ export class Kernels {
       outs: layer.rows, y_row0: v.yRow0 ?? 0, y_stride: v.yStride, y_col0: v.yCol0 ?? 0,
       scale_stride: layer.scaleStride, flags: (v.add ? 1 : 0) | (v.gelu ? 2 : 0),
     };
-    const { outs, rows } = this.tuning;
-    return this.step(`quantised-linear-${bits}`, quantisedLinear(bits, outs, rows),
+    const { outs, rows, half } = this.tuning;
+    return this.step(`quantised-linear-${bits}`, quantisedLinear(bits, outs, rows, half),
       FIELDS.quantisedLinear, values, [x, layer.weight, layer.scale, layer.bias, y],
       [Math.ceil(Math.ceil(layer.rows / outs) / 8), Math.ceil(Math.ceil(v.rows / rows) / 8)]);
   }

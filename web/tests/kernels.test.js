@@ -217,7 +217,8 @@ async function argmaxKernel(device, kernels, { rows, segments, width, y0 }) {
 
 export async function run(query, log) {
   const adapter = await navigator.gpu.requestAdapter();
-  const device = await adapter.requestDevice();
+  const f16 = adapter.features.has("shader-f16");
+  const device = await adapter.requestDevice({ requiredFeatures: f16 ? ["shader-f16"] : [] });
   const kernels = new Kernels(device);
   const base = { add: false, activation: false, xRow0: 0, yRow0: 0, yCol0: 0 };
   const cases = [
@@ -245,15 +246,21 @@ export async function run(query, log) {
     cases.push([`quantised linear, 4 bits, tile ${outs} x ${rows}`, () => quantised(device, tiled, 4,
       { rows: 21, columns: 76, outs: 19, add: true, activation: true, xRow0: 1, yRow0: 2, yCol0: 4 })]);
   }
+  // Products in f16 where the GPU has it: checked to f16's precision.
+  for (const [outs, rows] of f16 ? CHOICES.tiles : []) {
+    const tiled = new Kernels(device, { ...TUNING, outs, rows, half: true });
+    cases.push([`quantised linear, 4 bits, tile ${outs} x ${rows}, f16`, () => quantised(device, tiled, 4,
+      { rows: 21, columns: 76, outs: 19, add: true, activation: true, xRow0: 1, yRow0: 2, yCol0: 4 }), 4e-3]);
+  }
   for (const queries of CHOICES.queries) {
     const grouped = new Kernels(device, { ...TUNING, queries });
     cases.push([`attention, ${queries} query rows per invocation`,
       () => attentionKernel(device, grouped, { rows: 13, dim: 128, heads: 2, prefix: 7 })]);
   }
   const results = { passed: 0, failed: 0, cases: [] };
-  for (const [name, test] of cases) {
+  for (const [name, test, tolerance = 2e-5] of cases) {
     const error = await test();
-    const ok = error < 2e-5;
+    const ok = error < tolerance;
     results[ok ? "passed" : "failed"]++;
     results.cases.push({ name, error, ok });
     log(`${ok ? "ok  " : "FAIL"} ${name}: largest error ${error.toExponential(2)} of the largest value`);

@@ -21,7 +21,7 @@ permissions:
   contents: read
 env:
   EXPORT: ${{ inputs.export || 'slots-teacher-coco-rank64-w4' }}
-  SUITES: ${{ inputs.suites || 'bench' }}
+  SUITES: ${{ inputs.suites || 'kernels bench reference' }}
   FRAMES: ${{ inputs.frames || '3' }}
   # Limits of the kernel timing: every choice is timed, however slow the GPU.
   BUDGET: "60"

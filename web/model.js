@@ -398,8 +398,12 @@ export async function tune(device, manifest, tensors, { budget = 10, slow = 0.25
   };
   const candidates = [
     ...CHOICES.tiles.map(([outs, r]) => ({
-      kind: "product", name: `product ${outs} x ${r}`, set: { outs, rows: r },
+      kind: "product", name: `product ${outs} x ${r}`, set: { outs, rows: r, half: false },
       make: product({ ...TUNING, outs, rows: r }),
+    })),
+    ...(device.features.has("shader-f16") ? CHOICES.tiles : []).map(([outs, r]) => ({
+      kind: "product", name: `product ${outs} x ${r} f16`, set: { outs, rows: r, half: true },
+      make: product({ ...TUNING, outs, rows: r, half: true }),
     })),
     ...CHOICES.queries.map((queries) => ({
       kind: "attention", name: `attention ${queries}`, set: { queries },
@@ -460,7 +464,7 @@ async function tuned(device, manifest, tensors) {
 
 // `progress(done, total)` follows the download in bytes; `stage(text)` names what follows.
 export async function loadModel(base, progress, stage = () => {}) {
-  const device = await requestDevice();
+  const device = await requestDevice(["shader-f16"]);
   const manifest = await (await fetch(new URL("manifest.json", base))).json();
   const tensors = await loadWeights(device, base, manifest, progress);
   stage("Choosing the fastest kernels for this GPU");

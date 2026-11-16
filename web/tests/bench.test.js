@@ -18,7 +18,7 @@ export async function run(query, log) {
     features: [...adapter.features].sort(),
   };
   log(`adapter: ${JSON.stringify(described)}`);
-  const device = await requestDevice(["timestamp-query"]);
+  const device = await requestDevice(["timestamp-query", "shader-f16"]);
   device.addEventListener("uncapturederror", (event) => log(`GPU ERROR ${event.error.message}`));
   const manifest = await (await fetch(new URL("manifest.json", base))).json();
   const started = performance.now();
