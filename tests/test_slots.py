@@ -350,3 +350,20 @@ def test_pool_embeddings_averages_cells_and_keeps_partial_ones():
     # The last column holds one grid column, the last cell one position.
     assert pooled[0, 13, 0] == (26 + 53) / 2
     assert pooled[0, -1, 0] == 27 * 27 - 1
+
+
+def test_prefix_adapters_receive_gradients_and_start_as_the_frozen_prefix():
+    torch.manual_seed(0)
+    text, region = tiny_text(), tiny_region()
+    head = SlotHead(text, slots=4, label_tokens=3, rank=2, prefix_rank=2)
+    embeddings = torch.randn(2, 7, DIM)
+    frozen = prefix_cache(text, embeddings, no_rotation)
+    adapted = prefix_cache(text, embeddings, no_rotation, adapters=head.prefix_adapters)
+    assert not frozen[0][0].requires_grad and adapted[-1][0].requires_grad
+    assert torch.allclose(frozen[-1][1], adapted[-1][1], atol=1e-5)
+    objectness, _, _ = head(text, region, adapted, no_rotation)
+    objectness.sum().backward()
+    assert any(
+        p.grad is not None and p.grad.abs().sum() > 0 for p in head.prefix_adapters.parameters()
+    )
+    assert all(p.grad is None for p in text.parameters())

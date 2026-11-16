@@ -72,15 +72,20 @@ def block_forward(block, x, positions, freqs, rotate, prefix=None, adapter=None)
     return x + attended + out, (k, v)
 
 
-@torch.no_grad()
-def prefix_cache(text, embeddings, rotate, trace=None):
+def prefix_cache(text, embeddings, rotate, trace=None, adapters=None):
     """Keys and values of the image prefix for a batch of [B, PREFIX, D] input embeddings.
 
+    `adapters` (a head's `prefix_adapters`, one per block) act at the prefix positions
+    and receive gradients; without them the prefix is computed without a graph.
     `trace`, a dict, receives the hidden state after every block under "prefix"."""
     positions = torch.arange(embeddings.size(1), device=embeddings.device)
     x, cache = embeddings, []
-    for block in text.blocks:
-        x, kv = block_forward(block, x, positions, text.freqs_cis, rotate)
+    if adapters is not None:
+        x = x.float()
+    per_block = adapters if adapters is not None else [None] * len(text.blocks)
+    for block, adapter in zip(text.blocks, per_block, strict=True):
+        with torch.set_grad_enabled(adapters is not None and torch.is_grad_enabled()):
+            x, kv = block_forward(block, x, positions, text.freqs_cis, rotate, adapter=adapter)
         cache.append(kv)
         if trace is not None:
             trace.setdefault("prefix", []).append(x)
@@ -126,7 +131,7 @@ def soft_boxes(box_logits):
 class SlotHead(nn.Module):
     """The trainable parts: slot queries, the mask and role inputs, adapters and objectness."""
 
-    def __init__(self, text, slots=32, label_tokens=3, rank=16, hints=False):
+    def __init__(self, text, slots=32, label_tokens=3, rank=16, hints=False, prefix_rank=0):
         super().__init__()
         dim, ff = text.wte.size(1), text.blocks[0].mlp.fc1.out_features
         self.slots, self.label_tokens = slots, label_tokens
@@ -136,17 +141,24 @@ class SlotHead(nn.Module):
         self.queries = nn.Parameter(torch.randn(slots, dim) * scale)
         self.mask = nn.Parameter(embeddings.mean(0).clone())
         self.roles = nn.Parameter(torch.randn(self.width, dim) * scale)
-        self.adapters = nn.ModuleList(
-            nn.ModuleDict(
-                {
-                    "qkv": LowRank(dim, 3 * dim, rank),
-                    "proj": LowRank(dim, dim, rank),
-                    "fc1": LowRank(dim, ff, rank),
-                    "fc2": LowRank(ff, dim, rank),
-                }
+
+        def adapters(rank):
+            return nn.ModuleList(
+                nn.ModuleDict(
+                    {
+                        "qkv": LowRank(dim, 3 * dim, rank),
+                        "proj": LowRank(dim, dim, rank),
+                        "fc1": LowRank(dim, ff, rank),
+                        "fc2": LowRank(ff, dim, rank),
+                    }
+                )
+                for _ in text.blocks
             )
-            for _ in text.blocks
-        )
+
+        self.adapters = adapters(rank)
+        # A second set for the image prefix positions (`prefix_cache`), for a head whose
+        # prefix differs from what the frozen decoder was trained on (a pooled one).
+        self.prefix_adapters = adapters(prefix_rank) if prefix_rank else None
         self.objectness = nn.Linear(dim, 1)
         # Video: how strongly a previous frame's box and label (a hint) enter a slot.
         # Starts at zero, so a hinted head begins as the unhinted one.
