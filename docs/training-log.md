@@ -804,15 +804,20 @@ H100; evaluated and studied as above (evaluations `-pool2-*-tiles2`):
 |---|---|---|---|---|---|---|
 | 4 bits, one crop, 729 image positions | 0.699 | 0.656 / 0.684 | 0.786 / 0.564 | 0.515 | 0.16 | 0.834 / 0.796 |
 | 4 bits, one crop, 196 pooled positions | 0.54 | 0.487 / 0.529 | 0.625 / 0.399 | 0.285 | 0.02 | 0.720 / 0.700 |
+| The same, and rank-64 adapters at the image positions | 0.611 | 0.565 / 0.607 | 0.751 / 0.452 | 0.388 | 0.02 | 0.783 / 0.778 |
 
 Pooling costs 17 points of COCO F1 and 11 on VOC. Labels hold up (held-out exact label
 0.91) and boxes do not: F1 at IoU 0.75 nearly halves and objects smaller than a grid cell
 are no longer found. The frozen decoder reads averaged embeddings it was never trained
-on, and the adapters act only at slot positions. `prefix_rank` adds a second adapter set
-that acts at the image positions and is trained through the prefix
-(`slots-teacher-coco-rank64-w4-crops1-pool2-prefix64`, in training: held-out box IoU
-0.445 and 0.502 at steps 1,000 and 2,000, against 0.298 and 0.367 without those adapters
-and 0.601 and 0.639 with the full prefix).
+on, and the adapters act only at slot positions.
+
+`prefix_rank` adds a second adapter set that acts at the image positions and is trained
+through the prefix (`slots.prefix_cache`). `slots-teacher-coco-rank64-w4-crops1-pool2-prefix64`
+(rank 64, 3.0 hours on one H100; evaluations `-pool2-prefix64-*-tiles2`) recovers 8 of
+the 17 points on COCO and 6 of 11 on VOC, and stays 9 and 5 points below the full
+prefix; objects under one cell remain lost, since four cells' embeddings are averaged
+before any trained weight sees them. Neither head is exported: the browser keeps the
+full prefix.
 
 `scripts/figures.py` draws the training curves, accuracy against latency per GPU,
 recall by object size and side-by-side example images from downloaded run outputs; the rendered figures are in

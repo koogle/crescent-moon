@@ -161,8 +161,8 @@ manifest. Timed with the current head's weights exported under `prefix_pool` 2 (
 Against PyTorch with the same pooling, on one image, 11 of 12 checks pass; the twelfth
 finds 191 of 192 box bins identical. `slots-teacher-coco-rank64-w4-crops1-pool2`, a head
 trained on the pooled prefix, reaches COCO F1 0.487 against 0.656 with the full prefix
-([training log](training-log.md#a-pooled-image-prefix)), so the export keeps the full
-prefix.
+([training log](training-log.md#a-pooled-image-prefix)), and 0.565 with adapters at the image positions as well, so the export
+keeps the full prefix.
 
 ## Not done yet
 

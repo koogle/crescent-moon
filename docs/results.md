@@ -73,8 +73,8 @@ unchanged. Log: "Video: MOT17".
 
 The browser's forward pass on the 4-bit export matches PyTorch on three images: every
 activation within 3.2e-4 of the largest value, every box bin, label token and selected
-box identical, also on a real GPU. In Chromium on a Modal L4 the pass takes 0.80 s per
-frame (vision 0.17 s, decoder 0.60 s), from 2.46 s with the first kernels; a phone is not
+box identical, also on a real GPU. In Chromium on a Modal L4 the pass takes 0.78 s per
+frame (vision 0.15 s, decoder 0.60 s), from 2.46 s with the first kernels; a phone is not
 measured. Log: "Crops for the
 current head", "Low-bit backbone weights", "Heads trained on the 4-bit backbone"; [`webgpu.md`](webgpu.md).
 
@@ -106,6 +106,7 @@ current head", "Low-bit backbone weights", "Heads trained on the 4-bit backbone"
 | The denoising (masked-diffusion) pass | Same scores without it, training 2.4 instead of 3.2 hours | same |
 | Carbon labels instead of, or merged with, COCO's on the same images | 0.678 against 0.692 | Label source on the same images |
 | Training the head on the 4-bit backbone | Recovers 1.5 of 4.5 points on COCO, loses 2 on VOC; equal in the browser's configuration | Heads trained on the 4-bit backbone |
+| Image prefix pooled 2 x 2 for a faster browser frame (0.51 s against 0.80 s) | COCO F1 0.487 against 0.656; 0.565 with adapters at the image positions | A pooled image prefix |
 | Tile crops in training | Small-object recall unchanged; higher precision, best VOC with tiles | Label source on the same images |
 
 ## Open work
