@@ -38,10 +38,12 @@
   <label>Categories (comma-separated COCO names; empty means all 80)
     <input id="categories" type="text" value="">
   </label>
-  <label>Camera <select id="camera"><option value="">Default camera</option></select></label>
+  <label>Source <select id="camera"><option value="">Default camera</option>
+    <option value="file">A video file…</option></select></label>
+  <label id="fileField" hidden>Video file <input id="file" type="file" accept="video/*"></label>
   <label>Model <select id="model"></select></label>
   <label class="inline"><input id="track" type="checkbox" checked>&nbsp;Track across frames</label>
-  <button id="toggle">Start camera</button>
+  <button id="toggle">Start</button>
 </div>
 <div class="controls" id="deviceStep" hidden>
   <progress id="progress" value="0" max="1" hidden></progress>
@@ -49,7 +51,7 @@
 </div>
 <div class="stage"><video id="video" muted playsinline autoplay></video><canvas id="overlay"></canvas>
   <div id="notice" hidden></div></div>
-<div id="status">The camera plays live; boxes from the last detected frame are drawn over it.</div>
+<div id="status">The camera or a video file plays live; boxes from the last detected frame are drawn over it.</div>
 <details id="diagnostics" hidden><summary>Timings on this device</summary><pre id="timings"></pre></details>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -76,6 +78,8 @@ const grabCrop = document.createElement("canvas");
 let config = null, running = false, stream = null, boxes = [], scale = 1, session = null;
 // Counts starts: a detection loop ends when a later start or a stop has replaced it.
 let run = 0;
+// True while a start is loading the detector in this browser, before the source opens.
+let loading = false;
 // The detector in this browser, once loaded: { model, patches, side, candidates, select }.
 let local = null, loadingLocal = null;
 // The Model list's entry for the detector in this browser, and whether it is chosen.
@@ -83,7 +87,7 @@ const DEVICE = "device";
 const onDevice = () => $("model").value === DEVICE;
 const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
 
-fetch("camera/config").then((r) => r.json()).then((c) => {
+fetch("camera/config", { cache: "no-store" }).then((r) => r.json()).then((c) => {
   config = c;
   for (const name of c.models) $("model").add(new Option(name, name, false, name === c.default));
   // The browser's own detector is one more model, offered when the server has an export
@@ -106,7 +110,7 @@ async function showDeviceStep() {
   const on = onDevice();
   $("deviceStep").hidden = !on; $("track").disabled = on;
   if (running) return;
-  toggle.textContent = "Start camera";
+  toggle.textContent = "Start";
   if (!on || local || loadingLocal) return;
   const kept = "caches" in window && (await (await caches.open("crescent-moon-weights")).keys()).length > 0;
   if (running || !onDevice() || local) return;
@@ -119,7 +123,7 @@ async function showDeviceStep() {
 $("model").addEventListener("change", () => {
   boxes = [];
   if (onDevice() && running && !local) stop("Stopped; start again to load the detector on this device.");
-  if (!onDevice() && running && !stream) stop("Stopped.");
+  if (!onDevice() && loading) stop("Stopped.");
   showDeviceStep();
 });
 
@@ -131,7 +135,8 @@ function loadLocal() {
     const step = (text) => { $("downloadText").textContent = text; if (running) notice(text); };
     $("progress").hidden = false; $("progress").value = 0;
     step("Loading the detector");
-    const [runtime, selection] = await Promise.all([import("./web/model.js"), import("./web/select.js")]);
+    const [runtime, selection] = await Promise.all(
+      ["model.js", "select.js"].map((name) => import(new URL(config.device.runtime + name, location.href).href)));
     const model = await runtime.loadModel(new URL(config.device.weights, location.href), (done, total) => {
       $("progress").value = done / total;
       step(`Loading the detector: ${megabytes(done)} of ${megabytes(total)} MB`);
@@ -218,7 +223,21 @@ async function listCameras() {
   picker.replaceChildren(...devices.map((d, i) =>
     new Option(d.label || `Camera ${i + 1}`, d.deviceId, false, d.deviceId === chosen)));
   if (!devices.length) picker.add(new Option("No camera found", ""));
+  // A video file from this device is one more source; it plays in a loop.
+  picker.add(new Option(videoFile ? `Video file: ${videoFile.name}` : "A video file…", FILE, false, chosen === FILE));
 }
+
+// The chosen video file and the URL it plays from.
+const FILE = "file";
+let videoFile = null, videoUrl = null, picked = false;
+$("file").addEventListener("change", async () => {
+  const [file] = $("file").files;
+  if (!file) return;
+  videoFile = file; picked = true;
+  await listCameras();
+  $("camera").value = FILE;
+  $("camera").dispatchEvent(new Event("change"));
+});
 
 function currentCamera() {
   const track = stream && stream.getVideoTracks()[0];
@@ -227,6 +246,17 @@ function currentCamera() {
 
 async function openCamera() {
   const id = $("camera").value;
+  if (id === FILE) {
+    if (!videoFile) throw new Error("choose a video file first");
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    stream = null; video.srcObject = null;
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    videoUrl = URL.createObjectURL(videoFile);
+    video.src = videoUrl; video.loop = true;
+    await video.play();
+    return;
+  }
+  video.removeAttribute("src"); video.loop = false;
   const video_ = { width: { ideal: 1280 } };
   if (id) video_.deviceId = { exact: id };
   const next = await navigator.mediaDevices.getUserMedia({ video: video_, audio: false });
@@ -239,6 +269,14 @@ async function openCamera() {
 navigator.mediaDevices.addEventListener("devicechange", listCameras);
 listCameras();
 $("camera").addEventListener("change", async () => {
+  // Choosing the file entry opens the file picker; the change that follows a pick does not.
+  if ($("camera").value === FILE && !picked) {
+    $("fileField").hidden = false;
+    $("file").click();
+    if (!videoFile) return;
+  }
+  picked = false;
+  $("fileField").hidden = $("camera").value !== FILE;
   if (!running) return;
   try {
     await openCamera();
@@ -277,7 +315,7 @@ async function detectLoop(mine) {
   let first = true;
   while (mine === run) {
     if (performance.now() - started > config.seconds * 1000) {
-      stop(`Stopped after ${config.seconds / 60} minutes; press Start camera to go on.`);
+      stop(`Stopped after ${config.seconds / 60} minutes; press Start to go on.`);
       return;
     }
     const w = video.videoWidth, h = video.videoHeight;
@@ -341,19 +379,22 @@ async function start() {
   // The detector in this browser is loaded before the camera opens; loaded once, it
   // stays for later starts.
   if (onDevice() && !local) {
-    status.textContent = "Loading the detector on this device; the camera starts when it is ready.";
+    status.textContent = "Loading the detector on this device; the picture starts when it is ready.";
+    loading = true;
     try {
       await loadLocal();
     } catch (error) {
+      loading = false;
       if (mine === run) stop(`Could not run on this device: ${error.message}`);
       return;
     }
+    loading = false;
     if (mine !== run) return;
   }
   try {
     await openCamera();
   } catch (error) {
-    if (mine === run) stop(`No camera: ${error.message}`);
+    if (mine === run) stop(`Could not open the source: ${error.message}`);
     return;
   }
   if (mine !== run) { stop(); return; }
@@ -364,17 +405,18 @@ async function start() {
   } else {
     notice("Starting the server's GPU. The first boxes can take about a minute; that wait is "
       + "the start-up, not the detector's speed.");
-    status.textContent = "Starting the GPU: the first boxes can take about a minute; the camera keeps playing.";
+    status.textContent = "Starting the GPU: the first boxes can take about a minute; the picture keeps playing.";
   }
   requestAnimationFrame(draw);
   detectLoop(mine);
 }
 
 function stop(message) {
-  run++; running = false; boxes = [];
+  run++; running = false; loading = false; boxes = [];
   overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
   if (stream) stream.getTracks().forEach((t) => t.stop());
   stream = null; video.srcObject = null;
+  video.pause(); video.removeAttribute("src"); video.load();
   toggle.classList.remove("stop"); notice("");
   showDeviceStep();
   if (message) status.textContent = message;

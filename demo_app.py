@@ -15,6 +15,7 @@ webcam and draws boxes over it: the page sends one frame at a time, downscaled t
 so the demo stops on its own within 24 hours.
 """
 
+import hashlib
 import io
 import json
 import os
@@ -290,9 +291,17 @@ def web():
     api = FastAPI()
     sessions = OrderedDict()  # camera session id -> {"model", "tracker", "started"}
 
+    # The page imports the browser runtime from a path named after its content, so a
+    # browser never pairs the page with modules it cached from an earlier deploy.
+    fresh = {"Cache-Control": "no-cache"}
+    digest = hashlib.sha256()
+    for name in sorted(WEB_FILES):
+        digest.update((WEB / name).read_bytes())
+    runtime = f"web/{digest.hexdigest()[:12]}/"
+
     @api.get("/camera")
     def camera_page():
-        return HTMLResponse(CAMERA_PAGE.read_text())
+        return HTMLResponse(CAMERA_PAGE.read_text(), headers=fresh)
 
     @api.get("/camera/config")
     def camera_config():
@@ -300,7 +309,7 @@ def web():
         export = CONFIG["device_export"]
         device = None
         if (EXPORTS / export / "manifest.json").exists():
-            device = {"export": export, "weights": f"weights/{export}/"}
+            device = {"export": export, "weights": f"weights/{export}/", "runtime": runtime}
         return {
             "models": names,
             "default": default,
@@ -309,12 +318,12 @@ def web():
             "device": device,
         }
 
-    @api.get("/web/{name}")
-    def web_file(name: str):
+    @api.get("/web/{version}/{name}")
+    def web_file(version: str, name: str):
         """The browser runtime's modules, imported by the camera page."""
-        if name not in WEB_FILES:
+        if name not in WEB_FILES or f"web/{version}/" != runtime:
             raise HTTPException(404)
-        return FileResponse(WEB / name, media_type="text/javascript")
+        return FileResponse(WEB / name, media_type="text/javascript", headers=fresh)
 
     @api.get("/weights/{export}/{name}")
     def weights_file(export: str, name: str):
