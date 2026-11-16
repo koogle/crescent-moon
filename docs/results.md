@@ -73,9 +73,10 @@ unchanged. Log: "Video: MOT17".
 
 The browser's forward pass on the 4-bit export matches PyTorch on three images: every
 activation within 3.2e-4 of the largest value, every box bin, label token and selected
-box identical, also on a real GPU. In Chromium on a Modal L4 the pass takes 0.78 s per
-frame (vision 0.15 s, decoder 0.60 s), from 2.46 s with the first kernels; a phone is not
-measured. Log: "Crops for the
+box identical, also on a real GPU. In Chromium on a Modal L4 the pass takes 0.75 s per
+frame (vision 0.12 s, decoder 0.59 s), from 2.46 s with the first kernels. On a GitHub
+macOS runner's Apple GPU it takes 2.2 s, where the kernels tuned on the L4 took 13.9 s;
+the page times the kernel choices on each device. A phone is not measured. Log: "Crops for the
 current head", "Low-bit backbone weights", "Heads trained on the 4-bit backbone"; [`webgpu.md`](webgpu.md).
 
 ## What moved the result

@@ -142,14 +142,51 @@ seconds per product: 4 x 16 0.0039, 4 x 8 0.0042, 8 x 8 0.0045, 2 x 16 0.0050, 2
 0.0053, 4 x 4 0.0053; per attention: 2 rows 0.0098, 1 row 0.0115, 4 rows 0.0194) and the
 frame takes 0.783 s. Every choice is checked by `web/tests/kernels.test.js`.
 
-A phone's first report is about 10 s per frame (no stage times yet), against 0.78 s on
-the L4. On a phone memory traffic is a likely limit: per output, a tile reads 4 K / outs
-bytes of activations and K / (2 rows) bytes of weights (K inputs), so the choices now
-include wide tiles (16 x 4, 8 x 4, 32 x 4, 16 x 8) that read a third of what 4 x 16
-does, and the timing budget is 10 s. On the L4 4 x 16 stays fastest (run
-`web-bench-tiles-001`: 4 x 16 0.0038 s, 8 x 8 0.0044, 8 x 4 0.0045, 16 x 8 0.0047,
-16 x 4 0.0049, 32 x 4 0.0094). The camera page lists the GPU, every choice's time and
-the latest frames' stage times under "Timings on this device".
+### On an Apple GPU
+
+A Mac and an iPhone took about 10 s per frame with the kernels tuned on the L4.
+`.github/workflows/browser-apple.yml` runs the suites in Chromium through Metal on a
+GitHub macOS runner (a virtualised M1; Playwright's WebKit has no WebGPU there, so
+Safari itself is not measured). Seconds per frame there, the 4-bit export, median of
+warm frames; each row passes the 36 reference checks:
+
+| Kernels | Vision | Decoder | Total |
+|---|---|---|---|
+| The L4's choices: 4 x 16 tile, attention in one kernel with 2 query rows | 3.02 | 10.39 | 13.86 |
+| Timed on the device: 4 x 4 tile, 4 query rows | 1.20 | 2.95 | 4.25 |
+| The same with attention in three kernels | 0.51 | 1.62 | 2.23 |
+| That with the softmax's normaliser kept apart, 2 x 8 tile in f16 | 0.49 | 1.56 | 2.17 |
+
+Two things cost a factor of six there, and neither shows on the L4:
+
+- **The tile of the quantised product.** One product of the decoder's MLP (1,018 rows,
+  8,192 outputs) takes 118 ms with the 4 x 16 tile and 21 ms with 4 x 4 (8 x 4 22 ms,
+  2 x 8 18 ms, 2 x 16 35 ms, 4 x 8 38 ms, 8 x 8 133 ms): a tile's sums have to fit the
+  GPU's registers, and 64 floats do not. The page did not find this at first because
+  the timing was skipped on a GPU that needed over 0.25 s for one product; the limit is
+  now 3 s.
+- **Attention.** The single kernel keeps 128 floats of sums and a query's 64 per
+  invocation and takes 67 to 95 ms per block for every choice of query rows.
+  `attentionScores`, `attentionSoftmax` and `attentionMix` (`split` in the tuning)
+  compute the scores of a 4 x 4 tile of rows and keys into a buffer [heads, rows, keys]
+  (133 MB for the decoder), turn each row into exp(score - max) with 1 / sum in a small
+  buffer, and mix the values in tiles of 2 rows by 16 columns, at most 32 floats of sums
+  per invocation: 8 ms per block. On the L4 the three kernels take 0.158 GPU seconds per
+  frame against 0.187 for the single one, and the frame 0.75 s against 0.78 (run
+  `web-bench-split-005`, where the timing picks them); with the softmax normalised in
+  place they took 0.205.
+
+Products in f16 (`half`: the products of one weight word are computed and summed in
+f16, sums over words in f32) are 2 to 13% faster than f32 at the small tiles and match
+the f32 kernels to 8e-6 on the kernel tests; the full pass has not been compared with
+them, so `loadModel` does not offer them to the timing. Wide tiles (16 x 4, 32 x 4,
+16 x 8), tried for their smaller memory traffic, take 190 to 380 ms there.
+
+The timing drops a choice that is over twice its kind's best only after three rounds,
+following one uncounted round: dropping after the first round removed the L4's best
+tile, whose first measurement was six times its later ones (run `web-bench-split-003`,
+0.91 s per frame). The camera page lists the GPU, every choice's time and the latest
+frames' stage times under "Timings on this device".
 
 With these kernels the pass matches the PyTorch reference on the L4 on all three images
 (36 of 36 checks; run `web-bench-final-l4`, and `web-bench-norm4-001` with the vec4 layer
