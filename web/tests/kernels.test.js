@@ -179,7 +179,7 @@ async function attentionKernel(device, kernels, { rows, dim, heads, prefix }) {
   }
   const yBuffer = upload(device, y0);
   const step = kernels.attention(upload(device, qkv), yBuffer, { rows, stride, dim, heads, prefix, yStride });
-  device.queue.submit([encode(device, [step])]);
+  device.queue.submit([encode(device, step)]);
   return worst(await read(device, yBuffer, 0, y0.byteLength), want);
 }
 
@@ -257,6 +257,13 @@ export async function run(query, log) {
     cases.push([`attention, ${queries} query rows per invocation`,
       () => attentionKernel(device, grouped, { rows: 13, dim: 128, heads: 2, prefix: 7 })]);
   }
+  const split = new Kernels(device, { ...TUNING, split: true });
+  cases.push(["attention in three kernels, head width 64, prefix",
+    () => attentionKernel(device, split, { rows: 13, dim: 128, heads: 2, prefix: 7 })]);
+  cases.push(["attention in three kernels, head width 72, all rows",
+    () => attentionKernel(device, split, { rows: 10, dim: 144, heads: 3, prefix: 0 })]);
+  cases.push(["attention in three kernels, more rows than a tile",
+    () => attentionKernel(device, split, { rows: 37, dim: 128, heads: 2, prefix: 21 })]);
   const results = { passed: 0, failed: 0, cases: [] };
   for (const [name, test, tolerance = 2e-5] of cases) {
     const error = await test();

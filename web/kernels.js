@@ -10,7 +10,7 @@ const GROUP = 32; // weights per scale
 // Work per invocation: the tile of the quantised product (outputs by token rows; rows
 // a multiple of 4) and the query rows of one head in attention. TUNING is the fastest
 // on an NVIDIA L4; CHOICES are what `tune` in model.js times on the device in use.
-export const TUNING = { outs: 4, rows: 16, queries: 2, half: false };
+export const TUNING = { outs: 4, rows: 16, queries: 2, half: false, split: false };
 export const CHOICES = {
   // An NVIDIA L4 is fastest with 4 x 16 and an Apple GPU with 4 x 4, where 4 x 16 takes
   // 5.5 times as long: a tile's sums have to fit the GPU's registers.
@@ -286,6 +286,109 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 FIELDS.attention = ["rows", "stride", "dim", "heads", "prefix", "y_stride"];
 
+// The same attention in three kernels with little state per invocation (`split` in the
+// tuning), for GPUs on which the single kernel's sums do not fit the registers. They
+// share a buffer of scores [heads, rows, key_stride] (key_stride: rows rounded up to 4).
+//
+// 1. scores[head, row, n] = q . k_n / sqrt(width), a tile of 4 rows by 4 keys.
+export function attentionScores(headWidth) {
+  const quads = headWidth / 4, four = [0, 1, 2, 3];
+  return `
+struct P { rows: u32, stride: u32, dim: u32, heads: u32, prefix: u32, y_stride: u32, key_stride: u32 }
+@group(0) @binding(0) var<uniform> p: P;
+@group(0) @binding(1) var<storage, read> qkv: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read_write> scores: array<vec4<f32>>;
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+  let n = id.x * 4u;
+  let row = id.y * 4u;
+  let head = id.z;
+  if (n >= p.rows || row >= p.rows) { return; }
+  let last = p.rows - 1u;
+  let column = (head * ${headWidth}u) >> 2u;
+  let quarter = p.stride >> 2u;
+${four.map((i) => `  let q${i} = min(row + ${i}u, last) * quarter + column;
+  let k${i} = min(n + ${i}u, last) * quarter + (p.dim >> 2u) + column;
+  var a${i} = vec4<f32>(0.0);`).join("\n")}
+  for (var t = 0u; t < ${quads}u; t++) {
+${four.map((i) => `    let key${i} = qkv[k${i} + t];`).join("\n")}
+${four.map((i) => `    let query${i} = qkv[q${i} + t];
+    a${i} += vec4<f32>(${four.map((j) => `dot(query${i}, key${j})`).join(", ")});`).join("\n")}
+  }
+${four.map((i) => `  if (row + ${i}u < p.rows) { scores[(((head * p.rows + row + ${i}u) * p.key_stride) >> 2u) + id.x] = a${i} * ${1 / Math.sqrt(headWidth)}; }`).join("\n")}
+}`;
+}
+
+// 2. scores[head, row] becomes its softmax over the row's keys (the first `prefix` for a
+// row before `prefix`, else all rows), zero past them.
+export const attentionSoftmax = `
+struct P { rows: u32, stride: u32, dim: u32, heads: u32, prefix: u32, y_stride: u32, key_stride: u32 }
+@group(0) @binding(0) var<uniform> p: P;
+@group(0) @binding(1) var<storage, read_write> scores: array<vec4<f32>>;
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+  let row = id.x;
+  let head = id.y;
+  if (row >= p.rows || head >= p.heads) { return; }
+  let keys = select(p.rows, p.prefix, row < p.prefix);
+  let start = ((head * p.rows + row) * p.key_stride) >> 2u;
+  let count = p.key_stride >> 2u;
+  let lanes = vec4<u32>(0u, 1u, 2u, 3u);
+  var top = vec4<f32>(-3.0e38);
+  for (var i = 0u; i < count; i++) {
+    top = max(top, select(vec4<f32>(-3.0e38), scores[start + i], (vec4<u32>(4u * i) + lanes) < vec4<u32>(keys)));
+  }
+  let most = max(max(top.x, top.y), max(top.z, top.w));
+  var sum = vec4<f32>(0.0);
+  for (var i = 0u; i < count; i++) {
+    let e = select(vec4<f32>(0.0), exp(scores[start + i] - most), (vec4<u32>(4u * i) + lanes) < vec4<u32>(keys));
+    scores[start + i] = e;
+    sum += e;
+  }
+  let scale = 1.0 / (sum.x + sum.y + sum.z + sum.w);
+  for (var i = 0u; i < count; i++) { scores[start + i] *= scale; }
+}`;
+
+// 3. y[row, head] = sum_n scores[head, row, n] v_n, a tile of 2 rows by 16 columns.
+export function attentionMix(headWidth) {
+  const quads = headWidth / 4, four = [0, 1, 2, 3], two = [0, 1];
+  return `
+struct P { rows: u32, stride: u32, dim: u32, heads: u32, prefix: u32, y_stride: u32, key_stride: u32 }
+@group(0) @binding(0) var<uniform> p: P;
+@group(0) @binding(1) var<storage, read> qkv: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read> scores: array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read_write> y: array<vec4<f32>>;
+@compute @workgroup_size(4, 16, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+  let first = id.x * 4u;  // of the head's vec4 columns
+  let row = id.y * 2u;
+  let head = id.z;
+  if (first >= ${quads}u || row >= p.rows) { return; }
+  let last = p.rows - 1u;
+  let column = (head * ${headWidth}u) >> 2u;
+  // Columns past the head's width repeat its last and are not written.
+  let c = vec4<u32>(min(first, ${quads - 1}u), min(first + 1u, ${quads - 1}u), min(first + 2u, ${quads - 1}u), min(first + 3u, ${quads - 1}u));
+  let value = ((2u * p.dim) >> 2u) + column;
+  let quarter = p.stride >> 2u;
+${two.map((i) => `  let s${i} = ((head * p.rows + min(row + ${i}u, last)) * p.key_stride) >> 2u;
+${four.map((t) => `  var a${i}_${t} = vec4<f32>(0.0);`).join("\n")}`).join("\n")}
+  let keys = select(p.rows, p.prefix, row + 1u < p.prefix);
+  for (var n = 0u; n < keys; n += 4u) {
+${two.map((i) => `    let w${i} = scores[s${i} + (n >> 2u)];`).join("\n")}
+${four.map((j) => `    {
+      let at = min(n + ${j}u, last) * quarter + value;
+${four.map((t) => `      let v${t} = qkv[at + c[${t}]];`).join("\n")}
+${two.map((i) => four.map((t) => `      a${i}_${t} += w${i}[${j}] * v${t};`).join("\n")).join("\n")}
+    }`).join("\n")}
+  }
+${two.map((i) => `  if (row + ${i}u < p.rows) {
+    let to = (((row + ${i}u) * p.y_stride) >> 2u) + column + first;
+${four.map((t) => `    if (first + ${t}u < ${quads}u) { y[to + ${t}u] = a${i}_${t}; }`).join("\n")}
+  }`).join("\n")}
+}`;
+}
+FIELDS.attentionSplit = [...FIELDS.attention, "key_stride"];
+
 // y[y_row0 + cell] = mean of the rows of x in that pool x pool cell of a side x side grid
 // of rows (the last cell of a row or column is smaller); ceil(side / pool) ** 2 cells.
 export const poolGrid = `
@@ -349,6 +452,7 @@ export class Kernels {
     this.tuning = tuning;
     this.pipelines = new Map();
     this.modules = new Map();
+    this.scores = new Map();  // attention's score buffers by size
   }
 
   pipeline(key, source) {
@@ -437,6 +541,7 @@ export class Kernels {
       [Math.ceil(v.heads / 8), Math.ceil(v.rows / 8)]);
   }
 
+  // The steps of attention: one kernel, or three with `split` in the tuning.
   attention(qkv, y, v) {
     const width = v.dim / v.heads;
     if (v.stride % 4 || v.yStride % 4 || width % 4) throw new Error("Attention reads and writes rows and heads of a multiple of 4 floats");
@@ -444,9 +549,23 @@ export class Kernels {
       rows: v.rows, stride: v.stride, dim: v.dim, heads: v.heads, prefix: v.prefix ?? 0,
       y_stride: v.yStride,
     };
-    const { queries } = this.tuning;
-    return this.step(`attention-${width}`, attention(width, queries), FIELDS.attention, values,
-      [qkv, y], [Math.ceil(v.heads / 8), Math.ceil(Math.ceil(v.rows / queries) / 8)]);
+    const { queries, split } = this.tuning;
+    if (!split) {
+      return [this.step(`attention-${width}`, attention(width, queries), FIELDS.attention, values,
+        [qkv, y], [Math.ceil(v.heads / 8), Math.ceil(Math.ceil(v.rows / queries) / 8)])];
+    }
+    const keyStride = Math.ceil(v.rows / 4) * 4, bytes = v.heads * v.rows * keyStride * 4;
+    if (!this.scores.has(bytes)) this.scores.set(bytes, storage(this.device, bytes));
+    const scores = this.scores.get(bytes), fields = FIELDS.attentionSplit;
+    const all = { ...values, key_stride: keyStride }, tiles = Math.ceil(Math.ceil(v.rows / 4) / 8);
+    return [
+      this.step(`attention-scores-${width}`, attentionScores(width), fields, all, [qkv, scores],
+        [tiles, tiles, v.heads]),
+      this.step("attention-softmax", attentionSoftmax, fields, all, [scores],
+        [Math.ceil(v.rows / 8), Math.ceil(v.heads / 8)]),
+      this.step(`attention-mix-${width}`, attentionMix(width), fields, all, [qkv, scores, y],
+        [Math.ceil(Math.ceil(width / 16) / 4), Math.ceil(Math.ceil(v.rows / 2) / 16), v.heads]),
+    ];
   }
 
   // v: { side, pool, xStride, dim, yRow0, yStride }

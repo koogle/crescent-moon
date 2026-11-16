@@ -203,7 +203,7 @@ export class SlotModel {
       const name = `vision.blocks.${i}`, all = { rows: IMAGE_ROWS, xStride: V.dim, yStride: V.dim };
       s.push(norm(b.vx, `${name}.ln1`, b.vn, { ...all, dim: V.dim }));
       s.push(q(b.vn, `${name}.attn.qkv`, b.vqkv, { ...all, yStride: 3 * V.dim }));
-      s.push(k.attention(b.vqkv, b.vmix,
+      s.push(...k.attention(b.vqkv, b.vmix,
         { rows: IMAGE_ROWS, stride: 3 * V.dim, dim: V.dim, heads: V.heads, yStride: V.dim }));
       s.push(q(b.vmix, `${name}.attn.proj`, b.vx, { ...all, add: true }));
       s.push(norm(b.vx, `${name}.ln2`, b.vn, { ...all, dim: V.dim }));
@@ -243,7 +243,7 @@ export class SlotModel {
       s.push(q(b.normed, `${name}.attn.qkv`, b.qkv, { ...all, yStride: 3 * T.dim }));
       adapt(i, "qkv", b.normed, T.dim, T.dim, b.qkv, 3 * T.dim, 3 * T.dim);
       s.push(k.rotary(b.rotary, b.qkv, { rows, stride: 3 * T.dim, dim: T.dim, heads: T.heads }));
-      s.push(k.attention(b.qkv, b.mixed,
+      s.push(...k.attention(b.qkv, b.mixed,
         { rows, stride: 3 * T.dim, dim: T.dim, heads: T.heads, prefix: PREFIX, yStride: T.dim }));
       s.push(q(b.mixed, `${name}.attn.proj`, b.x, { ...all, add: true }));
       adapt(i, "proj", b.mixed, T.dim, T.dim, b.x, T.dim, T.dim);
@@ -384,7 +384,7 @@ export async function tune(device, manifest, tensors, { budget = 10, slow = 3, h
   const now = () => performance.now() / 1000;
   const time = async (make, repeats) => {
     const start = now();
-    device.queue.submit([encode(device, Array.from({ length: repeats }, make))]);
+    device.queue.submit([encode(device, Array.from({ length: repeats }, make).flat())]);
     await device.queue.onSubmittedWorkDone();
     return (now() - start) / repeats;
   };
@@ -408,9 +408,11 @@ export async function tune(device, manifest, tensors, { budget = 10, slow = 3, h
       make: product({ ...TUNING, outs, rows: r, half: true }),
     })),
     ...CHOICES.queries.map((queries) => ({
-      kind: "attention", name: `attention ${queries}`, set: { queries },
+      kind: "attention", name: `attention ${queries}`, set: { queries, split: false },
       make: attention({ ...TUNING, queries }),
     })),
+    { kind: "attention", name: "attention split", set: { split: true },
+      make: attention({ ...TUNING, split: true }) },
   ];
   const seconds = {}, started = now();
   let chosen = { ...TUNING }, rounds = 0;
