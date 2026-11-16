@@ -791,6 +791,29 @@ equal on the 500 COCO images, each at its tuned threshold (runs `*-coco-device`)
 
 The browser export therefore keeps the head trained on BF16.
 
+### A pooled image prefix
+
+`prefix_pool` in a training config averages the 27 x 27 grid of image embeddings over
+2 x 2 cells before the decoder (`train_slots.pool_embeddings`): 196 image positions
+instead of 729, which takes the browser's frame from 0.80 s to 0.51 s on an L4
+([`webgpu.md`](webgpu.md)). `slots-teacher-coco-rank64-w4-crops1-pool2` is
+`slots-teacher-coco-rank64-w4-crops1` with that prefix, 20,000 steps in 2.9 hours on one
+H100; evaluated and studied as above (evaluations `-pool2-*-tiles2`):
+
+| Head | Held-out box IoU | COCO F1, fast / tiled | COCO P / R, fast | COCO F1 at IoU 0.75, fast | Recall under 1 cell, fast | VOC F1, fast / tiled |
+|---|---|---|---|---|---|---|
+| 4 bits, one crop, 729 image positions | 0.699 | 0.656 / 0.684 | 0.786 / 0.564 | 0.515 | 0.16 | 0.834 / 0.796 |
+| 4 bits, one crop, 196 pooled positions | 0.54 | 0.487 / 0.529 | 0.625 / 0.399 | 0.285 | 0.02 | 0.720 / 0.700 |
+
+Pooling costs 17 points of COCO F1 and 11 on VOC. Labels hold up (held-out exact label
+0.91) and boxes do not: F1 at IoU 0.75 nearly halves and objects smaller than a grid cell
+are no longer found. The frozen decoder reads averaged embeddings it was never trained
+on, and the adapters act only at slot positions. `prefix_rank` adds a second adapter set
+that acts at the image positions and is trained through the prefix
+(`slots-teacher-coco-rank64-w4-crops1-pool2-prefix64`, in training: held-out box IoU
+0.445 and 0.502 at steps 1,000 and 2,000, against 0.298 and 0.367 without those adapters
+and 0.601 and 0.639 with the full prefix).
+
 `scripts/figures.py` draws the training curves, accuracy against latency per GPU,
 recall by object size and side-by-side example images from downloaded run outputs; the rendered figures are in
 the archive under `figures/`.
