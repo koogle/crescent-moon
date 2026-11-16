@@ -3,7 +3,7 @@
 //
 //   node web/tests/run.cjs bench --export artifacts/web/NAME [--frames N] [--gpu vulkan]
 
-import { profile } from "../kernels.js";
+import { TUNING, profile } from "../kernels.js";
 import { SlotModel, loadWeights, patches, requestDevice, tune } from "../model.js";
 
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
@@ -28,7 +28,9 @@ export async function run(query, log) {
   const tuneStarted = performance.now();
   const limits = {};
   for (const name of ["budget", "slow", "half"]) if (query.get(name)) limits[name] = Number(query.get(name));
-  const tuning = await tune(device, manifest, tensors, limits);
+  const tuning = query.get("tuning")
+    ? { ...TUNING, ...JSON.parse(query.get("tuning")) }
+    : await tune(device, manifest, tensors, limits);
   const tuneSeconds = (performance.now() - tuneStarted) / 1000;
   log(`tuned in ${tuneSeconds.toFixed(1)} s: ${JSON.stringify(tuning)}`);
   const model = new SlotModel(device, manifest, tensors, tuning);

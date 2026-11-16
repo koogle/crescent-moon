@@ -15,7 +15,7 @@ export const CHOICES = {
   // An NVIDIA L4 is fastest with 4 x 16 and an Apple GPU with 4 x 4, where 4 x 16 takes
   // 5.5 times as long: a tile's sums have to fit the GPU's registers.
   tiles: [[4, 16], [4, 4], [8, 4], [2, 16], [4, 8], [2, 8], [2, 4], [8, 8]],
-  queries: [2, 4, 8, 1],
+  queries: [2, 4, 1],
 };
 const FIELDS = {};
 
@@ -319,12 +319,14 @@ ${four.map((i) => `  if (row + ${i}u < p.rows) { scores[(((head * p.rows + row +
 }`;
 }
 
-// 2. scores[head, row] becomes its softmax over the row's keys (the first `prefix` for a
-// row before `prefix`, else all rows), zero past them.
+// 2. scores[head, row] becomes exp(score - the row's largest) over the row's keys (the
+// first `prefix` for a row before `prefix`, else all rows) and zero past them;
+// norm[head, row] receives 1 / their sum.
 export const attentionSoftmax = `
 struct P { rows: u32, stride: u32, dim: u32, heads: u32, prefix: u32, y_stride: u32, key_stride: u32 }
 @group(0) @binding(0) var<uniform> p: P;
 @group(0) @binding(1) var<storage, read_write> scores: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read_write> norm: array<f32>;
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let row = id.x;
@@ -345,11 +347,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     scores[start + i] = e;
     sum += e;
   }
-  let scale = 1.0 / (sum.x + sum.y + sum.z + sum.w);
-  for (var i = 0u; i < count; i++) { scores[start + i] *= scale; }
+  norm[head * p.rows + row] = 1.0 / (sum.x + sum.y + sum.z + sum.w);
 }`;
 
-// 3. y[row, head] = sum_n scores[head, row, n] v_n, a tile of 2 rows by 16 columns.
+// 3. y[row, head] = norm[head, row] sum_n scores[head, row, n] v_n, a tile of 2 rows by
+// 16 columns.
 export function attentionMix(headWidth) {
   const quads = headWidth / 4, four = [0, 1, 2, 3], two = [0, 1];
   return `
@@ -357,7 +359,8 @@ struct P { rows: u32, stride: u32, dim: u32, heads: u32, prefix: u32, y_stride: 
 @group(0) @binding(0) var<uniform> p: P;
 @group(0) @binding(1) var<storage, read> qkv: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> scores: array<vec4<f32>>;
-@group(0) @binding(3) var<storage, read_write> y: array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read> norm: array<f32>;
+@group(0) @binding(4) var<storage, read_write> y: array<vec4<f32>>;
 @compute @workgroup_size(4, 16, 1)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   let first = id.x * 4u;  // of the head's vec4 columns
@@ -383,7 +386,8 @@ ${two.map((i) => four.map((t) => `      a${i}_${t} += w${i}[${j}] * v${t};`).joi
   }
 ${two.map((i) => `  if (row + ${i}u < p.rows) {
     let to = (((row + ${i}u) * p.y_stride) >> 2u) + column + first;
-${four.map((t) => `    if (first + ${t}u < ${quads}u) { y[to + ${t}u] = a${i}_${t}; }`).join("\n")}
+    let scale = norm[head * p.rows + row + ${i}u];
+${four.map((t) => `    if (first + ${t}u < ${quads}u) { y[to + ${t}u] = scale * a${i}_${t}; }`).join("\n")}
   }`).join("\n")}
 }`;
 }
@@ -452,7 +456,7 @@ export class Kernels {
     this.tuning = tuning;
     this.pipelines = new Map();
     this.modules = new Map();
-    this.scores = new Map();  // attention's score buffers by size
+    this.scores = new Map();  // attention's score and norm buffers by the scores' size
   }
 
   pipeline(key, source) {
@@ -555,15 +559,17 @@ export class Kernels {
         [qkv, y], [Math.ceil(v.heads / 8), Math.ceil(Math.ceil(v.rows / queries) / 8)])];
     }
     const keyStride = Math.ceil(v.rows / 4) * 4, bytes = v.heads * v.rows * keyStride * 4;
-    if (!this.scores.has(bytes)) this.scores.set(bytes, storage(this.device, bytes));
-    const scores = this.scores.get(bytes), fields = FIELDS.attentionSplit;
+    if (!this.scores.has(bytes)) {
+      this.scores.set(bytes, [storage(this.device, bytes), storage(this.device, v.heads * v.rows * 4)]);
+    }
+    const [scores, norm] = this.scores.get(bytes), fields = FIELDS.attentionSplit;
     const all = { ...values, key_stride: keyStride }, tiles = Math.ceil(Math.ceil(v.rows / 4) / 8);
     return [
       this.step(`attention-scores-${width}`, attentionScores(width), fields, all, [qkv, scores],
         [tiles, tiles, v.heads]),
-      this.step("attention-softmax", attentionSoftmax, fields, all, [scores],
+      this.step("attention-softmax", attentionSoftmax, fields, all, [scores, norm],
         [Math.ceil(v.rows / 8), Math.ceil(v.heads / 8)]),
-      this.step(`attention-mix-${width}`, attentionMix(width), fields, all, [qkv, scores, y],
+      this.step(`attention-mix-${width}`, attentionMix(width), fields, all, [qkv, scores, norm, y],
         [Math.ceil(Math.ceil(width / 16) / 4), Math.ceil(Math.ceil(v.rows / 2) / 16), v.heads]),
     ];
   }

@@ -370,8 +370,8 @@ export async function requestDevice(features = []) {
 // compiled during the first half of `budget` seconds (the default first; those not
 // reached are left out) and rounds run for the second half, three at least; the default
 // stays unless another choice is over 5% faster. A GPU that
-// needs over `slow` seconds for one product keeps the default untimed. A choice over 1.5
-// times its kind's best is left out of later rounds. `half` adds the products in f16
+// needs over `slow` seconds for one product keeps the default untimed. After three rounds a
+// choice over twice its kind's best is left out of later rounds. `half` adds the products in f16
 // to the choices where the device has shader-f16.
 // Returns { outs, rows, queries, rounds, seconds: { choice: seconds } }.
 export async function tune(device, manifest, tensors, { budget = 10, slow = 3, half = false } = {}) {
@@ -411,9 +411,12 @@ export async function tune(device, manifest, tensors, { budget = 10, slow = 3, h
       kind: "attention", name: `attention ${queries}`, set: { queries, split: false },
       make: attention({ ...TUNING, queries }),
     })),
-    { kind: "attention", name: "attention split", set: { split: true },
-      make: attention({ ...TUNING, split: true }) },
   ];
+  // The split attention is compiled right after the default.
+  candidates.splice(candidates.findIndex((c) => c.kind === "attention") + 1, 0, {
+    kind: "attention", name: "attention split", set: { split: true },
+    make: attention({ ...TUNING, split: true }),
+  });
   const seconds = {}, started = now();
   let chosen = { ...TUNING }, rounds = 0;
   // The weights' first use is slow on some devices; it stays out of the times.
@@ -430,17 +433,19 @@ export async function tune(device, manifest, tensors, { budget = 10, slow = 3, h
       }
     }
     for (const candidate of ready) candidate.best = Infinity;
+    // One round that is not counted: the GPU's first seconds of work are slow.
+    for (const candidate of ready) await time(candidate.make, 2);
     while (rounds < 3 || now() - started < budget) {
       for (const candidate of ready) {
         if (candidate.out) continue;
         candidate.best = Math.min(candidate.best, await time(candidate.make, 2));
       }
       rounds++;
-      // A choice far behind its kind's best is not timed again.
-      for (const kind of ["product", "attention"]) {
+      // After three rounds a choice far behind its kind's best is not timed again.
+      for (const kind of rounds < 3 ? [] : ["product", "attention"]) {
         const same = ready.filter((c) => c.kind === kind);
         const best = Math.min(...same.map((c) => c.best));
-        for (const candidate of same) candidate.out = candidate.best > 1.5 * best;
+        for (const candidate of same) candidate.out = candidate.best > 2 * best;
       }
     }
     for (const kind of ["product", "attention"]) {
@@ -458,7 +463,7 @@ export async function tune(device, manifest, tensors, { budget = 10, slow = 3, h
 // `tune`, remembered in this browser (the choice belongs to the device's GPU). A device
 // on which the timing fails runs the default kernels.
 async function tuned(device, manifest, tensors) {
-  const key = `crescent-moon-tuning-5-${manifest.head.prefix_pool}-${JSON.stringify(CHOICES)}`;
+  const key = `crescent-moon-tuning-6-${manifest.head.prefix_pool}-${JSON.stringify(CHOICES)}`;
   try {
     const kept = JSON.parse(localStorage.getItem(key));
     if (kept) return kept;

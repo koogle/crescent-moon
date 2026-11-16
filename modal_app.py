@@ -453,9 +453,22 @@ def slots(run_id: str, config: str = "configs/slots-4-shards.json"):
 
 
 @app.local_entrypoint()
-def browser(run_id: str, export: str, frames: int = 6, gpu: str = "L4", suites: str = "bench"):
+def browser(
+    run_id: str,
+    export: str,
+    frames: int = 6,
+    gpu: str = "L4",
+    suites: str = "bench",
+    tuning: str = "",
+):
     """The browser runtime on a Modal GPU: `--suites bench,reference` times the pass and
-    compares it with the export's PyTorch reference."""
-    options = {"bench": {"frames": frames}, "reference": {"timeout": 30}, "kernels": {}}
+    compares it with the export's PyTorch reference. `--tuning` (JSON, see TUNING in
+    `web/kernels.js`) sets the kernels' tuning in both; without it bench times the choices."""
+    chosen = {"tuning": tuning} if tuning else {}
+    options = {
+        "bench": {"frames": frames} | chosen,
+        "reference": {"timeout": 30} | chosen,
+        "kernels": {},
+    }
     config = {"export": export, "suites": [[name, options[name]] for name in suites.split(",")]}
     launch(run_browser, run_id, config, "report.json", gpu=gpu)

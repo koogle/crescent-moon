@@ -138,9 +138,9 @@ function loadLocal() {
     }, (text) => { $("progress").hidden = true; step(text); });
     model.device.lost.then((info) => {
       local = null; loadingLocal = null; $("progress").hidden = true; $("downloadText").textContent = "";
-      if (!onDevice()) return;
-      $("model").value = config.default; notice(""); showDeviceStep();
-      status.textContent = `The browser's GPU device was lost (${info.message || info.reason}); back on the server.`;
+      // The choice of model stays: the next start loads the detector again.
+      const message = `The browser's GPU device was lost (${info.message || info.reason}); start again to reload the detector.`;
+      if (onDevice() && running) stop(message); else if (onDevice()) { showDeviceStep(); status.textContent = message; }
     });
     // `warm` turns true after the first frame, which compiles the kernels.
     model.device.addEventListener("uncapturederror", (event) => {
@@ -287,7 +287,12 @@ async function detectLoop(mine) {
         notice("Preparing the first frame. It compiles the detector's GPU kernels, so it takes "
           + "much longer than the frames that follow.");
       }
-      await detectLocal(w, h, mine);
+      try {
+        await detectLocal(w, h, mine);
+      } catch (error) {
+        if (mine === run) stop(`The detector failed on this device: ${error.message}`);
+        return;
+      }
       if (mine === run) notice("");
       // Let the page paint and take input between frames.
       await new Promise((r) => setTimeout(r, 0));
@@ -340,9 +345,7 @@ async function start() {
     try {
       await loadLocal();
     } catch (error) {
-      if (mine !== run) return;
-      $("model").value = config.default;
-      stop(`Could not run on this device: ${error.message}`);
+      if (mine === run) stop(`Could not run on this device: ${error.message}`);
       return;
     }
     if (mine !== run) return;

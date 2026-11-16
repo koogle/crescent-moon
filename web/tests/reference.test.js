@@ -3,7 +3,7 @@
 // state after decoder blocks 0, 11 and 23, the slots' final hidden state, every slot's
 // objectness, bins, tokens and probabilities, and the selected boxes.
 
-import { read } from "../kernels.js";
+import { TUNING, read } from "../kernels.js";
 import { SlotModel, loadWeights, patches, requestDevice } from "../model.js";
 import { candidates, select } from "../select.js";
 
@@ -39,7 +39,9 @@ export async function run(query, log) {
   const manifest = await (await fetch(new URL("manifest.json", base))).json();
   const started = performance.now();
   const tensors = await loadWeights(device, base, manifest);
-  const model = new SlotModel(device, manifest, tensors);
+  const tuning = { ...TUNING, ...JSON.parse(query.get("tuning") || "{}") };
+  log(`tuning: ${JSON.stringify(tuning)}`);
+  const model = new SlotModel(device, manifest, tensors, tuning);
   log(`loaded ${manifest.shards.length} shards in ${((performance.now() - started) / 1000).toFixed(1)} s`);
   const results = { passed: 0, failed: 0, images: {} };
   const check = (image, name, ok, detail) => {
