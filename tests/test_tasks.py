@@ -1,5 +1,11 @@
 from crescent_moon.run import predict
-from crescent_moon.tasks import COCO_NAMES, coco_samples, lvis_samples, refcoco_m_samples
+from crescent_moon.tasks import (
+    COCO_NAMES,
+    coco_json_samples,
+    coco_samples,
+    lvis_samples,
+    refcoco_m_samples,
+)
 
 LVIS = {
     "categories": [
@@ -198,3 +204,22 @@ def test_coco_samples_ask_a_set_number_of_categories():
     (one,) = coco_samples(rows, images=1, seed=0, categories=1)
     assert [q["phrase"] for q in one["queries"]] == [COCO_NAMES[3]]
     assert coco_samples(rows, images=1, seed=0) == coco_samples(rows, images=1, seed=0)
+
+
+def test_coco_json_samples_group_boxes_by_category():
+    annotations = {
+        "categories": [{"id": 1, "name": "person"}, {"id": 3, "name": "car"}],
+        "images": [
+            {"id": 7, "file_name": "a.jpeg", "width": 100, "height": 50},
+            {"id": 8, "file_name": "b.jpeg", "width": 100, "height": 50},
+        ],
+        "annotations": [
+            {"image_id": 7, "category_id": 3, "bbox": [10, 5, 20, 10]},
+            {"image_id": 7, "category_id": 1, "bbox": [0, 0, 5, 5]},
+            {"image_id": 7, "category_id": 3, "bbox": [50, 5, 10, 10]},
+        ],
+    }
+    (sample,) = coco_json_samples(annotations, images=5, seed=0, folder="set")
+    assert sample["image"] == "set/a.jpeg"
+    assert [q["phrase"] for q in sample["queries"]] == ["car", "person"]
+    assert sample["queries"][0]["boxes"] == [[10, 5, 30, 15], [50, 5, 60, 15]]

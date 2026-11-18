@@ -203,6 +203,30 @@ def coco_samples(rows, images, seed, names=COCO_NAMES, exclude_images=0, categor
     return samples
 
 
+def coco_json_samples(annotations, images, seed, folder):
+    """Prompt each sampled image of a COCO-format annotation file with the categories
+    annotated in it. `folder` is where the images lie under the image folder."""
+    names = {c["id"]: c["name"] for c in annotations["categories"]}
+    by_image = defaultdict(lambda: defaultdict(list))
+    for a in annotations["annotations"]:
+        x, y, w, h = a["bbox"]
+        by_image[a["image_id"]][names[a["category_id"]]].append([x, y, x + w, y + h])
+    rows = sorted((i for i in annotations["images"] if i["id"] in by_image), key=lambda i: i["id"])
+    return [
+        {
+            "image_id": row["id"],
+            "image": f"{folder}/{row['file_name']}",
+            "width": row["width"],
+            "height": row["height"],
+            "queries": [
+                {"phrase": name, "kind": "present", "boxes": boxes, "exhaustive": True, "group": ""}
+                for name, boxes in sorted(by_image[row["id"]].items())
+            ],
+        }
+        for row in random.Random(seed).sample(rows, min(images, len(rows)))
+    ]
+
+
 # Pascal VOC's 20 categories under their COCO names, so every model is prompted the same
 # way on both datasets.
 VOC_TO_COCO = {

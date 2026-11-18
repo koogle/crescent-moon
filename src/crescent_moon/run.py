@@ -18,6 +18,7 @@ from pathlib import Path
 
 from crescent_moon.metrics import summarize
 from crescent_moon.tasks import (
+    coco_json_samples,
     coco_samples,
     lvis_samples,
     mot_samples,
@@ -28,8 +29,12 @@ from crescent_moon.tasks import (
 
 
 def hub_files(dataset):
+    """Local paths of a dataset's files: from its Hub repository, or as given when it has
+    none (paths on the volume)."""
     from huggingface_hub import hf_hub_download
 
+    if "repo" not in dataset:
+        return dataset["files"]
     return [
         hf_hub_download(
             dataset["repo"], name, repo_type=dataset["repo_type"], revision=dataset["revision"]
@@ -92,6 +97,8 @@ def build_samples(config, image_folder, files=hub_files):
             built = mot_dataset_samples(dataset, image_folder)
         elif dataset["kind"] == "voc":
             built = voc_tar_samples(paths[0], dataset, config["seed"], image_folder)
+        elif dataset["kind"] == "coco_json":
+            built = coco_zip_samples(paths[0], dataset, config["seed"], image_folder)
         else:
             raise ValueError(f"Unknown dataset kind {dataset['kind']!r}")
         samples += [sample | {"dataset": dataset["name"]} for sample in built]
@@ -150,6 +157,23 @@ def voc_tar_samples(path, dataset, seed, image_folder):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 jpeg = members[f"{root}/JPEGImages/{sample['image_id']}.jpg"]
                 target.write_bytes(tar.extractfile(jpeg).read())
+    return built
+
+
+def coco_zip_samples(path, dataset, seed, image_folder):
+    """Samples from a zip that holds a COCO-format annotation file (`annotations`, a path
+    inside the zip) and its images (under `image_root`), with the sampled images written
+    to the image folder."""
+    import zipfile
+
+    with zipfile.ZipFile(path) as archive:
+        annotations = json.loads(archive.read(dataset["annotations"]))
+        built = coco_json_samples(annotations, dataset["images"], seed, dataset["name"])
+        for sample in built:
+            target = Path(image_folder) / sample["image"]
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(archive.read(f"{dataset['image_root']}/{target.name}"))
     return built
 
 

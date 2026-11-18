@@ -1,0 +1,70 @@
+{
+  "seed": 20261112,
+  "model": {
+    "adapter": "slots",
+    "checkpoint": "",
+    "steps": 1
+  },
+  "datasets": [
+    {
+      "name": "coco_o_sketch",
+      "kind": "coco_json",
+      "files": [
+        "/runs/datasets/ood_coco.zip"
+      ],
+      "annotations": "ood_coco/sketch/annotations/instances_val2017.json",
+      "image_root": "ood_coco/sketch/val2017",
+      "images": 2000
+    },
+    {
+      "name": "coco_o_cartoon",
+      "kind": "coco_json",
+      "files": [
+        "/runs/datasets/ood_coco.zip"
+      ],
+      "annotations": "ood_coco/cartoon/annotations/instances_val2017.json",
+      "image_root": "ood_coco/cartoon/val2017",
+      "images": 2000
+    },
+    {
+      "name": "coco_o_painting",
+      "kind": "coco_json",
+      "files": [
+        "/runs/datasets/ood_coco.zip"
+      ],
+      "annotations": "ood_coco/painting/annotations/instances_val2017.json",
+      "image_root": "ood_coco/painting/val2017",
+      "images": 2000
+    },
+    {
+      "name": "coco_o_weather",
+      "kind": "coco_json",
+      "files": [
+        "/runs/datasets/ood_coco.zip"
+      ],
+      "annotations": "ood_coco/weather/annotations/instances_val2017.json",
+      "image_root": "ood_coco/weather/val2017",
+      "images": 2000
+    },
+    {
+      "name": "coco_o_handmake",
+      "kind": "coco_json",
+      "files": [
+        "/runs/datasets/ood_coco.zip"
+      ],
+      "annotations": "ood_coco/handmake/annotations/instances_val2017.json",
+      "image_root": "ood_coco/handmake/val2017",
+      "images": 2000
+    },
+    {
+      "name": "coco_o_tattoo",
+      "kind": "coco_json",
+      "files": [
+        "/runs/datasets/ood_coco.zip"
+      ],
+      "annotations": "ood_coco/tattoo/annotations/instances_val2017.json",
+      "image_root": "ood_coco/tattoo/val2017",
+      "images": 2000
+    }
+  ]
+}
