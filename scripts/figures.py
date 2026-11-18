@@ -1042,7 +1042,7 @@ CURVE_SERIES = [
     ("COCO only, 46k", "slots-rank64", 3),
     ("COCO + Carbon, rank 64", "slots-teacher-coco-rank64", 1),
     ("COCO + Carbon, rank 128", "slots-teacher-coco-rank128", 2),
-    ("+ tile crops, rank 64", "slots-tilecrops-teacher-coco-rank64", 8),
+    ("+ tile crops, rank 64", "slots-tilecrops-teacher-coco-rank64", 7),
     ("Rank 64 on 4-bit weights, trained on full precision", "slots-teacher-coco-rank64-w4", 4),
     ("Rank 64 on 4-bit weights, trained on them", "slots-teacher-coco-rank64-w4-head", 6),
 ]

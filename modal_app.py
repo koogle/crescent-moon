@@ -83,6 +83,12 @@ photon_image = (
     .add_local_dir(PACKAGE, "/root/crescent_moon")
 )
 kernel_image = with_source(modal.Image.from_registry(CUDA_IMAGE, add_python="3.12"))
+# Ultralytics, for the closed-set reference detectors; OpenCV needs these system libraries.
+yolo_image = with_source(
+    modal.Image.debian_slim(python_version="3.12")
+    .apt_install("libgl1", "libglib2.0-0")
+    .pip_install("ultralytics==8.3.40")
+)
 
 
 # Chromium with WebGPU on the container's GPU through Vulkan, for the browser runtime's
@@ -145,6 +151,18 @@ def evaluate(run_id, config, provenance, deadline):
     volumes={"/runs": volume},
 )
 def evaluate_photon(run_id, config, provenance, deadline):
+    return run_evaluation(run_id, config, provenance, deadline)
+
+
+@app.function(
+    image=yolo_image,
+    gpu="L40S",
+    timeout=LAUNCH_LIMIT_SECONDS,
+    retries=0,
+    max_containers=2,
+    volumes={"/runs": volume},
+)
+def evaluate_yolo(run_id, config, provenance, deadline):
     return run_evaluation(run_id, config, provenance, deadline)
 
 
@@ -445,6 +463,12 @@ def decoders(run_id: str, config: str = "configs/decoders.json"):
 @app.local_entrypoint()
 def photon(run_id: str, config: str = "configs/moondream3.1-photon.json"):
     launch(evaluate_photon, run_id, config, "summary.json", gpu="L40S")
+
+
+@app.local_entrypoint()
+def yolo(run_id: str, config: str = "configs/yolo11n.json"):
+    """A closed-set reference detector on the tuning split, COCO and VOC."""
+    launch(evaluate_yolo, run_id, config, "summary.json", gpu="L40S")
 
 
 @app.local_entrypoint()

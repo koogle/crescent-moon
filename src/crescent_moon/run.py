@@ -238,6 +238,10 @@ def make_detector(model, device, **extra):
         from crescent_moon.train_slots import SlotDetector
 
         return SlotDetector(**model, device=device)
+    if adapter == "yolo":
+        from crescent_moon.yolo import YoloDetector
+
+        return YoloDetector(**model, device=device)
     raise ValueError(f"Unknown adapter {adapter!r}")
 
 
