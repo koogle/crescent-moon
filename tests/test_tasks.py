@@ -242,3 +242,31 @@ def test_labelled_samples_prompt_the_labelled_categories():
     (sample,) = labelled_samples(replies, images=5, seed=0, folder="/data")
     assert sample["image"] == "/data/generated/00002.jpg"
     assert sample["queries"][0]["phrase"] == "dog" and len(sample["queries"][0]["boxes"]) == 2
+
+
+def test_generated_scene_fills_the_template_and_agrees_in_number():
+    import random
+
+    from crescent_moon.images import plural, scene
+
+    assert [plural(n) for n in ("person", "bus", "knife", "skis", "couch", "cup")] == [
+        "people",
+        "buses",
+        "knives",
+        "skis",
+        "couches",
+        "cups",
+    ]
+    settings = {
+        "max_categories": 2,
+        "counts": ["two"],
+        "groups": [["oven", "sink"]],
+        "group_share": 1.0,
+        "attributes": ["old"],
+        "attribute_share": 1.0,
+        "template": "{medium} of {things} {place}",
+        "choices": {"medium": ["A sketch"], "place": ["", ""]},
+    }
+    prompt, asked = scene(settings, random.Random(0))
+    assert set(asked) <= {"oven", "sink"}
+    assert prompt.startswith("A sketch of two old ") and not prompt.endswith(" ")

@@ -15,9 +15,10 @@ the manifest is skipped, so an interrupted run continues.
 - COCO (`detection-datasets/coco`, Parquet): every image with at least one annotated
   object in the listed training shards, in shard order, named by its COCO image id, so
   a teacher's labels can be set against COCO's own on the same images.
-- Generated (a text-to-image model on fal.ai): one image per prompt that names one to
-  four COCO categories in a place, condition and style drawn from the config's lists; the
-  manifest line keeps the prompt and the categories it names.
+- Generated (a source with a "model", a text-to-image model on fal.ai): one image per
+  prompt, which names a few COCO categories and fills the config's template from its lists
+  of media, places and so on (`scene`); the manifest line keeps the prompt and the
+  categories it names.
 """
 
 import argparse
@@ -155,37 +156,74 @@ def coco(settings, out, quota, max_side, existing):
 FAL = "https://fal.run/"
 
 
+PLURALS = {"person": "people", "knife": "knives", "mouse": "mice", "sheep": "sheep"}
+
+
+def plural(name):
+    """A COCO category name in the plural ("skis" and "scissors" already are)."""
+    if name in PLURALS or name.endswith(("skis", "scissors")):
+        return PLURALS.get(name, name)
+    return name + ("es" if name.endswith(("s", "x", "ch", "sh")) else "s")
+
+
 def scene(settings, rng):
-    """One prompt of the generated source and the categories it names: one to
-    `max_categories` COCO categories, some of them several times, in one of the
-    settings' places, conditions and styles."""
+    """One prompt of a generated source and the categories it names.
+
+    The prompt is `settings["template"]` with `{things}` and one drawn phrase per list in
+    `settings["choices"]` (a phrase list may hold "" for nothing). The things are one to
+    `max_categories` COCO categories, each with a count from `counts` and, with
+    probability `attribute_share`, a modifier from `attributes`. With probability
+    `group_share` the categories come from one of `groups` (categories that occur
+    together), otherwise from all 80."""
     from crescent_moon.tasks import COCO_NAMES
 
-    asked = rng.sample(COCO_NAMES, rng.randint(1, settings["max_categories"]))
-    counts = [rng.choice(settings["counts"]) for _ in asked]
-    things = [f"{count} {name}".strip() for count, name in zip(counts, asked, strict=True)]
+    many = rng.randint(1, settings["max_categories"])
+    groups = settings.get("groups")
+    if groups and rng.random() < settings["group_share"]:
+        pool = rng.choice(groups)
+        asked = rng.sample(pool, min(many, len(pool)))
+    else:
+        asked = rng.sample(COCO_NAMES, many)
+    things = []
+    for name in asked:
+        count = rng.choice(settings["counts"])
+        modifier = ""
+        if settings.get("attributes") and rng.random() < settings["attribute_share"]:
+            modifier = rng.choice(settings["attributes"]) + " "
+        # "a" is the only count that takes a singular noun, and its article agrees.
+        if count == "a":
+            count = "an" if (modifier + name)[0] in "aeiou" else "a"
+            things.append(f"{count} {modifier}{name}")
+        else:
+            things.append(f"{count} {modifier}{plural(name)}")
     listed = things[0] if len(things) == 1 else ", ".join(things[:-1]) + " and " + things[-1]
-    prompt = (
-        f"{rng.choice(settings['styles'])} of {listed} {rng.choice(settings['places'])}, "
-        f"{rng.choice(settings['conditions'])}"
-    )
-    return prompt, asked
+    drawn = {key: rng.choice(phrases) for key, phrases in settings["choices"].items()}
+    prompt = " ".join(settings["template"].format(things=listed, **drawn).split())
+    return prompt.replace(" ,", ","), asked
 
 
-def generated(settings, out, quota, max_side, rng, existing):
-    """Images from a text-to-image model on fal.ai (`settings["model"]`), one per `scene`;
-    the manifest line keeps the prompt and the categories it names. The key is read from
-    the FAL_KEY environment variable."""
+def generated(source, settings, out, quota, max_side, rng, existing):
+    """Images from a text-to-image model on fal.ai (`settings["model"]`), one per `scene`,
+    in a size drawn from `sizes`; the manifest line keeps the prompt and the categories
+    it names. The key is read from the FAL_KEY environment variable."""
     import os
     from concurrent.futures import ThreadPoolExecutor
 
     key = os.environ["FAL_KEY"]
-    scenes = [scene(settings, rng) for _ in range(settings["images"])]
-    wanted = [(i, s) for i, s in enumerate(scenes) if f"generated/{i:05d}" not in existing]
+    scenes = [
+        (*scene(settings, rng), rng.choice(settings["sizes"])) for _ in range(settings["images"])
+    ]
+    wanted = [(i, s) for i, s in enumerate(scenes) if f"{source}/{i:05d}" not in existing]
 
     def one(job):
-        index, (prompt, _) = job
-        body = {"prompt": prompt, "seed": index, "num_images": 1, **settings["request"]}
+        index, (prompt, _, size) = job
+        body = {
+            "prompt": prompt,
+            "seed": index,
+            "num_images": 1,
+            "image_size": size,
+            **settings["request"],
+        }
         request = urllib.request.Request(
             FAL + settings["model"],
             data=json.dumps(body).encode(),
@@ -200,10 +238,10 @@ def generated(settings, out, quota, max_side, rng, existing):
             return None
 
     with ThreadPoolExecutor(settings.get("workers", 8)) as pool:
-        for (index, (prompt, asked)), data in zip(
+        for (index, (prompt, asked, _)), data in zip(
             wanted[:quota], pool.map(one, wanted[:quota]), strict=True
         ):
-            line = data and save(data, out, "generated", f"{index:05d}", max_side, existing)
+            line = data and save(data, out, source, f"{index:05d}", max_side, existing)
             if line:
                 yield line | {"prompt": prompt, "asked": asked}
 
@@ -223,14 +261,19 @@ def prepare(config, out):
         "openimages": lambda s, q: open_images(s, out, q, config["max_side"], rng, existing),
         "objects365": lambda s, q: objects365(s, out, q, config["max_side"], existing),
         "coco": lambda s, q: coco(s, out, q, config["max_side"], existing),
-        "generated": lambda s, q: generated(s, out, q, config["max_side"], rng, existing),
     }
     for source, settings in config["sources"].items():
         quota = settings["images"] - counts.get(source, 0)
         if quota <= 0:
             continue
+        # A source with a "model" is generated under its own name; the others are fixed.
+        make = makers.get(source) or (
+            lambda s, q, source=source: generated(
+                source, s, out, q, config["max_side"], rng, existing
+            )
+        )
         with manifest.open("a") as handle:
-            for line in makers[source](settings, quota):
+            for line in make(settings, quota):
                 handle.write(json.dumps(line) + "\n")
                 handle.flush()
     return manifest
