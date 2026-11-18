@@ -1,0 +1,19 @@
+{
+  "seed": 20261112,
+  "model": {
+    "adapter": "slots",
+    "checkpoint": "",
+    "steps": 1
+  },
+  "datasets": [
+    {
+      "name": "generated_wide_carbon",
+      "kind": "labelled",
+      "files": [
+        "/runs/generated-wide/google--gemini-4-carbon.jsonl"
+      ],
+      "image_folder": "/runs/generated-wide/images",
+      "images": 4000
+    }
+  ]
+}
