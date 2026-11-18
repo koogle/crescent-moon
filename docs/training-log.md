@@ -856,6 +856,21 @@ sets (tables above). One macOS run lost its GPU device during the kernel timing 
 reported times of a lost device (0.04 s per frame); `tune` now stops when the device is
 lost, and the rerun measured 2.2 s with all 36 reference checks passing.
 
+### The 4-bit head on an L4
+
+`slots-teacher-coco-rank64` in PyTorch on an L4, 500 COCO val images, no tiles (runs
+`l4-rank64-full`, `l4-rank64-crops1`, `l4-rank64-w4-crops1`):
+
+| Backbone | Crops | Threshold | Precision | Recall | F1 | Seconds per image |
+|---|---|---|---|---|---|---|
+| Full precision | all | 0.29 | 0.780 | 0.643 | 0.705 | 0.226 |
+| Full precision | one | 0.29 | 0.766 | 0.610 | 0.680 | 0.124 |
+| 4 bits | one | 0.33 | 0.804 | 0.550 | 0.653 | 0.128 |
+
+The device configuration takes 57% of the full model's time. The single crop saves it:
+`round_weights_` keeps the rounded weights as floats, so in PyTorch 4 bits change the
+download (1.1 GB against 3.9 GB) and the F1, not the time.
+
 ### Crops for the current head
 
 `slots-teacher-coco-rank64` at threshold 0.29 without tiles, with the vision encoder

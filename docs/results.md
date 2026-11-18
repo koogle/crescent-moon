@@ -97,6 +97,10 @@ unchanged. Log: "Video: MOT17".
 | 4-bit weights, head trained on 4 bits | 0.675 | |
 | 4-bit weights and one crop (what the browser runs), any of the three heads | 0.654 to 0.655 | |
 
+In PyTorch on an L4 the 4-bit, one-crop head takes 0.128 s per image against 0.226 s for
+BF16 weights with all crops (one crop at BF16: 0.124 s); the crop saves the time, the 4
+bits the download (1.1 GB against 3.9 GB). Log: "The 4-bit head on an L4".
+
 The browser's forward pass on the 4-bit export matches PyTorch on three images: every
 activation within 3.2e-4 of the largest value, every box bin, label token and selected
 box identical, also on a real GPU. In Chromium on a Modal L4 the pass takes 0.75 s per

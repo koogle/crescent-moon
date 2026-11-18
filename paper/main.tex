@@ -350,18 +350,17 @@ the same weights; the head is a 50M-parameter addition to them.
 \begin{table}[t]
 \centering\small\setlength{\tabcolsep}{4pt}
 \caption{F1 at IoU 0.5 on COCO val and on COCO-O, each model at its threshold tuned on
-COCO, and seconds per frame in a browser on WebGPU (an L4; YOLO through ONNX Runtime Web,
-without box decoding).}
+COCO.}
 \label{tab:shift}
-\begin{tabular}{@{}lccr@{}}
+\begin{tabular}{@{}lcc@{}}
 \toprule
-Model & COCO & COCO-O & s/frame, browser \\
+Model & COCO & COCO-O \\
 \midrule
-Moondream 3.1 & .700 & \textbf{.781} & -- \\
-Slots, fast & .707 & .772 & -- \\
-Slots, 4-bit backbone & .654 & .721 & .75 \\
-YOLO11x & \textbf{.715} & .520 & .058 \\
-YOLO11n & .612 & .410 & \textbf{.031} \\
+Moondream 3.1 & .700 & \textbf{.781} \\
+Slots, fast & .707 & .772 \\
+Slots, 4-bit backbone & .654 & .721 \\
+YOLO11x & \textbf{.715} & .520 \\
+YOLO11n & .612 & .410 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -370,11 +369,11 @@ YOLO11n & .612 & .410 & \textbf{.031} \\
 would hold, we round every backbone weight to 4 bits, a 1.1\,GB download in place of
 3.9\,GB. With one image crop, as the browser runs it, the rank-64 head then scores F1
 0.654 on COCO against 0.705 at full precision, and 0.721 on COCO-O, still 20 points above
-YOLO11x. Training the head on the rounded backbone does not change the browser's result.
-A WebGPU runtime with hand-written kernels runs this model in 0.75\,s per frame on an L4
-and 2.2\,s on a virtualised Apple M1. YOLO11n in the same browser takes 0.031\,s and
-0.033\,s from a 10\,MB download, so on a device the head costs 24 to 67 times the time of
-a small closed-set detector and buys its accuracy on images unlike COCO's.
+YOLO11x. The small configuration is also the faster one. On an L4, the GPU class
+of a cheap cloud instance, the full-precision head with all crops takes 0.226\,s per image
+and the 4-bit, one-crop head 0.128\,s. The time is saved by the single crop (0.124\,s
+at full precision, F1 0.680); our PyTorch pass stores the rounded weights as floats, so
+the rounding buys the smaller download, not speed.
 
 \section{Limitations}
 The comparison is narrower than the models. The slot head knows COCO's 80 categories,
