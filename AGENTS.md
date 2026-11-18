@@ -39,6 +39,8 @@ Run commands from the repository root. Environment: `uv sync --extra dev --extra
   `web/`, the browser exports. An export is also on the volume under `web/<name>/`.
 - HF dataset `jfrick/lm-exploration-results`, folder `pr-167/post-training/detection/`:
   every run's outputs, head snapshots, selection studies and figures.
+- HF dataset `jfrick/crescent-moon-generated-carbon` (public): the generated test images
+  with the teacher's labels.
 - Private HF datasets `jfrick/crescent-moon-teacher-labels-gemini-4-carbon` and
   `-argon`: teacher labels and their images.
 - Credentials come from the environment: HF and Modal tokens, and the OpenRouter key in

@@ -796,7 +796,7 @@ name one to four COCO categories and fill a template from the config's lists (`s
 and `crescent_moon.teacher` labels them with Gemini 4 Carbon; the dataset kind `labelled`
 evaluates against those labels. `configs/generated-images.json`: 1,000 photo-style scenes
 (20 places, 12 conditions, 8 photo styles), 8,811 labelled objects, 5.81 USD of labelling
-(private HF dataset `jfrick/crescent-moon-generated-carbon`). Runs `generated-*`:
+(public HF dataset `jfrick/crescent-moon-generated-carbon`). Runs `generated-*`:
 
 | Model | Precision | Recall | F1 |
 |---|---|---|---|
