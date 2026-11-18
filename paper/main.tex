@@ -165,6 +165,27 @@ output, on a Pascal VOC test image with the rank-128 head's detections.}
 \label{fig:architecture}
 \end{figure*}
 
+\begin{table*}[t]
+\centering\small\setlength{\tabcolsep}{4pt}
+\caption{COCO val2017 (500 images) and VOC 2007 test (1{,}000 images). Seconds per
+COCO image on one L40S with the categories present prompted (2.9 per image); last column:
+with all 80 categories asked, on 100 of the images. Slots is the rank-128 head trained on
+COCO and teacher-labelled images, at thresholds tuned on COCO; the models and names are
+those of Fig.~\ref{fig:speed}.}
+\label{tab:main}
+\begin{tabular}{@{}lcccccrr@{}}
+\toprule
+Model & COCO P & COCO R & COCO F1$_{.5}$ & COCO F1$_{.75}$ & VOC F1$_{.5}$ & s/img & s/img, 80 \\
+\midrule
+Moondream 2 \texttt{detect} (1.9B) & .501 & .706 & .586 & .450 & .851 & .220 & 1.52 \\
+Moondream 3.1 (9.3B MoE) & .682 & \textbf{.719} & .700 & .560 & .857 & .208 & 2.67 \\
+\midrule
+Slots, fast & \textbf{.811} & .626 & .707 & .566 & .858 & \textbf{.091} & \textbf{.082} \\
+Slots, tiled & .743 & .695 & \textbf{.718} & \textbf{.586} & .844 & .229 & -- \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
 \section{Method}
 \textbf{Slots} (Fig.~\ref{fig:architecture}). After Moondream~2's 730-position image
 prefix we append 48 slots of six positions. Each position starts as a blank: a learned
@@ -210,26 +231,7 @@ phrases, the 20 categories under their COCO names), with micro precision, recall
 under one-to-one matching. Moondream is prompted once per present category and gives no
 confidences, so it has one operating point; the slot head receives no prompt.
 
-\begin{table*}[t]
-\centering\small\setlength{\tabcolsep}{4pt}
-\caption{COCO val2017 (500 images) and VOC 2007 test (1{,}000 images). Seconds per
-COCO image on one L40S with the categories present prompted (2.9 per image); last column:
-with all 80 categories asked, on 100 of the images. Slots is the rank-128 head trained on
-COCO and teacher-labelled images, at thresholds tuned on COCO; the models and names are
-those of Fig.~\ref{fig:speed}.}
-\label{tab:main}
-\begin{tabular}{@{}lcccccrr@{}}
-\toprule
-Model & COCO P & COCO R & COCO F1$_{.5}$ & COCO F1$_{.75}$ & VOC F1$_{.5}$ & s/img & s/img, 80 \\
-\midrule
-Moondream 2 \texttt{detect} (1.9B) & .501 & .706 & .586 & .450 & .851 & .220 & 1.52 \\
-Moondream 3.1 (9.3B MoE) & .682 & \textbf{.719} & .700 & .560 & .857 & .208 & 2.67 \\
-\midrule
-Slots, fast & \textbf{.811} & .626 & .707 & .566 & .858 & \textbf{.091} & \textbf{.082} \\
-Slots, tiled & .743 & .695 & \textbf{.718} & \textbf{.586} & .844 & .229 & -- \\
-\bottomrule
-\end{tabular}
-\end{table*}
+
 
 
 \textbf{Similar quality.} The fast head is level with Moondream~3.1: F1 0.707 against
@@ -247,6 +249,19 @@ more our recall is 0.84 against Moondream~3.1's 0.87; for objects under one cell
 at 2.5 times the time. On VOC, whose objects are larger, tiles cost 1.4 points of F1
 through lower precision.
 
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.9\textwidth]{selection-precision-recall.jpg}
+\caption{Precision against recall at IoU 0.5 from the full image, on COCO (left) and VOC
+(right). Dots: each head at its threshold tuned on COCO. Diamonds: Moondream~2 and 3.1,
+which give no confidence and so one point each. Adding 18k images labelled by Gemini~4
+Carbon to COCO's lifts the COCO curve (F1 0.694 to 0.705, 0.707 at rank 128) towards
+Moondream~3.1's point; on VOC the curves coincide and Moondream~3.1 sits on them. The
+violet curve runs the rank-64 head on a backbone rounded to 4 bits per weight, as a
+phone or browser would hold it.}
+\label{fig:pr}
+\end{figure*}
 
 \begin{figure}[t]
 \centering
@@ -270,6 +285,7 @@ categories asked on 100 of the images, the head takes 0.082\,s per image, Moondr
 answers all the same: Moondream~3.1 returns a box for 71\% of the absent categories, so
 its precision with all 80 asked is 0.05, where the head's is 0.79.
 
+
 \textbf{Streamed video.} Because a frame costs one pass however many categories are
 asked for, the head can run on live video. On two MOT17~\citep{milan2016mot16} street
 sequences (02 and 09, 1080p at 30\,fps; every third frame, 375 frames; every annotated
@@ -292,18 +308,6 @@ losses to 12\% and 9\% with per-frame F1 unchanged (0.455 against 0.447), at no 
 time.
 
 
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.9\textwidth]{selection-precision-recall.jpg}
-\caption{Precision against recall at IoU 0.5 from the full image, on COCO (left) and VOC
-(right). Dots: each head at its threshold tuned on COCO. Diamonds: Moondream~2 and 3.1,
-which give no confidence and so one point each. Adding 18k images labelled by Gemini~4
-Carbon to COCO's lifts the COCO curve (F1 0.694 to 0.705, 0.707 at rank 128) towards
-Moondream~3.1's point; on VOC the curves coincide and Moondream~3.1 sits on them. The
-violet curve runs the rank-64 head on a backbone rounded to 4 bits per weight, as a
-phone or browser would hold it.}
-\label{fig:pr}
-\end{figure*}
 
 \textbf{One step is enough.} The head is a masked-diffusion decoder run for a single
 step, and nothing we tried made further steps pay. Decoding in two or three steps,
@@ -324,6 +328,20 @@ on the teacher's labels without COCO lost 1.3 points. \emph{(iii)~Selection.} A 
 score with fusion of duplicates added 2.7 points without retraining, and tiles another
 1.1. Beyond rank 64, added capacity or conditioning moved COCO F1 by at most 0.6 points:
 rank 128, category prompts, a size-weighted loss.
+
+\textbf{On a device, and against a closed-set detector.} To see whether the head
+survives the weights a phone or a browser would hold, we round every backbone weight to
+4 bits, a 1.1\,GB download in place of 3.9\,GB. The rank-64 head then scores F1 0.660 on
+COCO against 0.705 at full precision (Fig.~\ref{fig:pr}), and training the head on the
+rounded backbone recovers 1.5 of those 4.5 points. A WebGPU runtime with hand-written
+kernels runs this model in a browser in 0.75\,s per frame on an L4 and 2.2\,s on a
+virtualised Apple M1. Where only COCO's categories are wanted, a detector built for them
+remains the better tool. On the same images and L40S,
+YOLO11x~\citep{redmon2016yolo,yolo11} (57M parameters) reaches F1 0.715 in 0.018\,s and
+YOLO11n (2.6M) reaches 0.612 in 0.008\,s, five and eleven times faster than the fast
+head, at a fraction of its size. What the slot head offers is detection inside a general
+VLM: the backbone stays frozen, so the same weights still caption, answer questions and
+point, and the head is a 50M-parameter addition to them.
 
 \section{Limitations}
 The comparison is narrower than the models. The slot head knows COCO's 80 categories,

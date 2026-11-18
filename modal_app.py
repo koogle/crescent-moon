@@ -83,11 +83,16 @@ photon_image = (
     .add_local_dir(PACKAGE, "/root/crescent_moon")
 )
 kernel_image = with_source(modal.Image.from_registry(CUDA_IMAGE, add_python="3.12"))
-# Ultralytics, for the closed-set reference detectors; OpenCV needs these system libraries.
-yolo_image = with_source(
+# Ultralytics brings its own PyTorch and torchvision; OpenCV needs these system libraries.
+yolo_image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("libgl1", "libglib2.0-0")
-    .pip_install("ultralytics==8.3.40")
+    .pip_install(
+        "ultralytics==8.3.40",
+        *[p for p in PACKAGES if p.startswith(("scipy", "pillow", "pyarrow", "huggingface"))],
+    )
+    .env({"HF_HOME": "/runs/hf-cache"})
+    .add_local_dir(PACKAGE, "/root/crescent_moon")
 )
 
 

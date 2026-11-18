@@ -721,6 +721,50 @@ image against 0.208 s. The slot pass is a fifth of that time, so fewer positions
 would save little; the vision encoder is the largest stage, and limiting it to one crop
 costs 1.5 points of F1 with a head trained on full-crop features.
 
+### Time against the number of categories asked
+
+A COCO dataset's `categories` in an evaluation config prompts each image with exactly
+that many (`tasks.coco_samples`): its annotated ones first, then absent ones drawn with
+the seed. `configs/asked-*.json` ask 1, 5, 10, 20, 40 and 80 categories on the same 100
+COCO val images; runs `asked-slots-rank128-b` (rank-128 head, full image, threshold
+0.31), `asked-moondream2` and `asked-moondream31` (Photon), one L40S each. Seconds per
+image, and F1 at IoU 0.5 with the absent categories counted:
+
+| Categories asked | Slots, seconds | Moondream 2, seconds | Moondream 3.1, seconds | Slots, F1 | Moondream 2, F1 | Moondream 3.1, F1 |
+|---|---|---|---|---|---|---|
+| 1 | 0.080 | 0.128 | 0.115 | 0.838 | 0.630 | 0.734 |
+| 5 | 0.081 | 0.219 | 0.263 | 0.753 | 0.641 | 0.579 |
+| 10 | 0.081 | 0.312 | 0.419 | 0.730 | 0.559 | 0.446 |
+| 20 | 0.081 | 0.483 | 0.729 | 0.727 | 0.463 | 0.301 |
+| 40 | 0.082 | 0.822 | 1.385 | 0.725 | 0.341 | 0.174 |
+| 80 | 0.082 | 1.515 | 2.670 | 0.715 | 0.223 | 0.096 |
+
+The head's time does not move; Moondream 3.1's with all 80 is 33 times the head's.
+Moondream also answers for categories that are absent: with 80 asked, Moondream 3.1
+returns at least one box for 5,507 of the 7,735 absent prompts (71%), 8,521 boxes on the
+100 images, so its precision is 0.051 (Moondream 2: 0.131) against the head's 0.790. With
+one category asked an image keeps only its first annotated category, so that row's F1
+is on fewer objects.
+
+### A closed-set reference: YOLO11
+
+`crescent_moon.yolo` runs an Ultralytics model in the evaluation harness: one pass per
+image, boxes handed to the prompted categories, confidences recorded. `configs/yolo11n.json`
+and `yolo11x.json` cover the tuning split, the 500 COCO images and VOC; runs `yolo11n-002`
+and `yolo11x-002` on one L40S, each at the confidence threshold with the best F1 on the
+tuning split (0.20 and 0.26):
+
+| Model | Parameters | COCO P / R | COCO F1 | VOC F1 | Seconds per COCO image |
+|---|---|---|---|---|---|
+| YOLO11n | 2.6M | 0.711 / 0.536 | 0.612 | 0.770 | 0.008 |
+| YOLO11x | 57M | 0.792 / 0.651 | 0.715 | 0.838 | 0.018 |
+| Slot head, rank 128, fast | 1.9B frozen + 100M | 0.811 / 0.626 | 0.707 | 0.858 | 0.091 |
+
+A detector built for COCO's categories is 5 to 11 times faster than the fast head and far
+smaller, and YOLO11x matches its COCO F1. On VOC the slot head's selection counts a
+truck as a car, as VOC's labels do; the YOLO runs record boxes of the prompted
+categories only, so their VOC F1 is without that. Parameter counts are Ultralytics'.
+
 ### Crops for the current head
 
 `slots-teacher-coco-rank64` at threshold 0.29 without tiles, with the vision encoder

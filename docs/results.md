@@ -37,13 +37,17 @@ Recall on the 500 COCO images by object size in cells of the 27 x 27 feature gri
 |---|---|---|---|
 | One image, 6 categories, through the demo page | 0.343 s | 0.081 s | 0.246 s |
 | Video frame, all 80 categories | | 0.047 s | 2.79 s |
+| COCO image, all 80 categories asked (100 images, L40S) | 1.52 s | 0.082 s | 2.67 s |
 | MOT17 frame, "person" only | 0.260 s | 0.104 s | 0.206 s |
 
 Stages of the fast head on an L40S (`slots-bins-16`, 0.078 s): vision encoder 0.046 s,
 image prefix 0.016 s, slot pass 0.016 s. Custom CUDA kernels for Moondream 2's sequential
 decoder cut its cost per box by 1.85x against eager PyTorch on an L4, without reproducing
-eager's boxes exactly. Log: "Demo", "Video: MOT17", "Where the time goes", "Custom decode
-kernels".
+eager's boxes exactly. With all 80 asked, Moondream 3.1 returns a box for 71% of the absent categories
+(precision 0.05 against the head's 0.79). On the same images and GPU YOLO11x reaches
+COCO F1 0.715 in 0.018 s and YOLO11n 0.612 in 0.008 s, against the head's 0.707 in
+0.091 s. Log: "Demo", "Video: MOT17", "Where the time goes", "Time against the number
+of categories asked", "A closed-set reference: YOLO11", "Custom decode kernels".
 
 ## Video (MOT17, every third frame of two sequences)
 
