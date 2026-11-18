@@ -46,7 +46,9 @@ and vocabulary heads read. Only low-rank adapters at the slot positions and an o
 layer are trained, with a Hungarian set loss. On 500 COCO val2017 images the head reaches
 F1 0.707 at IoU~0.5 in 0.091\,s per image on one L40S, where Moondream~3.1 (9.3B) reaches
 0.700 in 0.208\,s. On Pascal VOC 2007, which no model here was tuned on, it scores 0.858
-in 0.063\,s against 0.857 in 0.095\,s. The head finds fewer objects smaller than one
+in 0.063\,s against 0.857 in 0.095\,s. On COCO-O, the same categories as sketches,
+paintings and other shifted images, it stays level with Moondream~3.1 (0.772 against
+0.781), where a YOLO11x that matches it on COCO falls to 0.520. The head finds fewer objects smaller than one
 feature-grid cell than Moondream~3.1 (recall 0.20 against 0.36); also reading a $2\times2$
 grid of tiles closes that gap and gives F1 0.718 on COCO, at 2.5 times the time. A
 second or third decoding step leaves F1 unchanged. Because a frame
@@ -329,19 +331,47 @@ score with fusion of duplicates added 2.7 points without retraining, and tiles a
 1.1. Beyond rank 64, added capacity or conditioning moved COCO F1 by at most 0.6 points:
 rank 128, category prompts, a size-weighted loss.
 
-\textbf{On a device, and against a closed-set detector.} To see whether the head
-survives the weights a phone or a browser would hold, we round every backbone weight to
-4 bits, a 1.1\,GB download in place of 3.9\,GB. The rank-64 head then scores F1 0.660 on
-COCO against 0.705 at full precision (Fig.~\ref{fig:pr}), and training the head on the
-rounded backbone recovers 1.5 of those 4.5 points. A WebGPU runtime with hand-written
-kernels runs this model in a browser in 0.75\,s per frame on an L4 and 2.2\,s on a
-virtualised Apple M1. Where only COCO's categories are wanted, a detector built for them
-remains the better tool. On the same images and L40S,
-YOLO11x~\citep{redmon2016yolo,yolo11} (57M parameters) reaches F1 0.715 in 0.018\,s and
-YOLO11n (2.6M) reaches 0.612 in 0.008\,s, five and eleven times faster than the fast
-head, at a fraction of its size. What the slot head offers is detection inside a general
-VLM: the backbone stays frozen, so the same weights still caption, answer questions and
-point, and the head is a 50M-parameter addition to them.
+\textbf{Against a detector built for COCO.} Where only COCO's categories are wanted
+and the images look like COCO's, a closed-set detector is the better tool
+(Table~\ref{tab:shift}). On the COCO images and the same L40S,
+YOLO11x~\citep{redmon2016yolo,yolo11} (57M parameters) matches the fast head's F1 (0.715
+against 0.707) in a fifth of its time, and YOLO11n (2.6M) scores 0.612 in a tenth. Away
+from COCO's photos the order reverses. On COCO-O~\citep{mao2023cocoo}, 6{,}782
+human-labelled images of the same categories as sketches, cartoons, paintings, handmade
+objects, tattoos and photos in bad weather, the head scores 0.772 and stays within a point
+of Moondream~3.1 (0.781), while YOLO11x falls to 0.520 and YOLO11n to 0.410: their
+precision holds and their recall halves. The head keeps the robustness of the frozen
+backbone it reads. The backbone also still captions, answers questions and points with
+the same weights; the head is a 50M-parameter addition to them.
+
+\begin{table}[t]
+\centering\small\setlength{\tabcolsep}{4pt}
+\caption{F1 at IoU 0.5 on COCO val and on COCO-O, each model at its threshold tuned on
+COCO, and seconds per frame in a browser on WebGPU (an L4; YOLO through ONNX Runtime Web,
+without box decoding).}
+\label{tab:shift}
+\begin{tabular}{@{}lccr@{}}
+\toprule
+Model & COCO & COCO-O & s/frame, browser \\
+\midrule
+Moondream 3.1 & .700 & \textbf{.781} & -- \\
+Slots, fast & .707 & .772 & -- \\
+Slots, 4-bit backbone & .654 & .721 & .75 \\
+YOLO11x & \textbf{.715} & .520 & .058 \\
+YOLO11n & .612 & .410 & \textbf{.031} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{On a device.} To see whether the head survives the weights a phone or a browser
+would hold, we round every backbone weight to 4 bits, a 1.1\,GB download in place of
+3.9\,GB. With one image crop, as the browser runs it, the rank-64 head then scores F1
+0.654 on COCO against 0.705 at full precision, and 0.721 on COCO-O, still 20 points above
+YOLO11x. Training the head on the rounded backbone does not change the browser's result.
+A WebGPU runtime with hand-written kernels runs this model in 0.75\,s per frame on an L4
+and 2.2\,s on a virtualised Apple M1. YOLO11n in the same browser takes 0.031\,s and
+0.033\,s from a 10\,MB download, so on a device the head costs 24 to 67 times the time of
+a small closed-set detector and buys its accuracy on images unlike COCO's.
 
 \section{Limitations}
 The comparison is narrower than the models. The slot head knows COCO's 80 categories,
