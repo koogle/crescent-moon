@@ -878,6 +878,27 @@ columns are seconds per image on an L40S in these runs.
   the tiled head is level with Moondream 3.1 (0.796 against 0.795).
 - Moondream 2 on the generated set has recall 0.781 and precision 0.544.
 
+### Training with the generated images
+
+`slots-teacher-coco-generated-rank64` is `slots-teacher-coco-rank64` with both generated
+sets added to its training data (`configs/slots-teacher-coco-generated-rank64.json`:
+4,950 generated images with Carbon's labels; 68,765 training images after the label
+filter, 3.6 hours on one H100). Evaluated and studied as the other heads
+(`-coco-tune-tiles2`, `-coco-tiles2`, `-voc-tiles2`; fusion at IoU 0.5, box
+confidence^0.25, threshold chosen on the tuning split):
+
+| Head | Threshold | COCO P / R | COCO F1 | F1, IoU 0.75 | VOC P / R | VOC F1 |
+|---|---|---|---|---|---|---|
+| `slots-teacher-coco-rank64`, full image | 0.29 | 0.779 / 0.644 | 0.705 | 0.555 | 0.782 / 0.908 | 0.840 |
+| With the generated images, full image | 0.31 | 0.812 / 0.617 | 0.701 | 0.565 | 0.811 / 0.896 | 0.851 |
+| `slots-teacher-coco-rank64`, tiles | 0.35 | 0.763 / 0.670 | 0.714 | 0.589 | 0.777 / 0.917 | 0.841 |
+| With the generated images, tiles | 0.35 | 0.772 / 0.656 | 0.709 | 0.591 | 0.793 / 0.911 | 0.848 |
+
+Precision rises by 3 points on both sets and recall falls by 1 to 3; COCO F1 moves by
+-0.4 and VOC by +1.1 from the full image, both inside the 1.5-point noise.
+
+The generated images cannot serve as a test set for this head.
+
 ### The 4-bit head against YOLO in a browser
 
 `web/tests/yolo.test.js` runs YOLO's ONNX files (640 x 640 input, exported by
