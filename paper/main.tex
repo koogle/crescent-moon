@@ -35,25 +35,29 @@
 \maketitle
 
 \begin{abstract}
-\noindent Small vision-language models (VLMs) such as Moondream detect objects by
-decoding one coordinate token at a time, with one prompt per category, so their latency
-grows with the number of categories and of objects. Masked diffusion language models draft a whole
-sequence in parallel and refine it over several steps; we asked whether a VLM could
-draft its boxes that way, and found that one step is enough. We give a \emph{frozen}
-1.9B-parameter Moondream~2 a set output: 48 slots of six blank positions appended
-after the image tokens, which one forward pass fills and the model's own coordinate, size
-and vocabulary heads read. Only low-rank adapters at the slot positions and an objectness
-layer are trained, with a Hungarian set loss. On 500 COCO val2017 images the head reaches
-F1 0.707 at IoU~0.5 in 0.091\,s per image on one L40S, where Moondream~3.1 (9.3B) reaches
-0.700 in 0.208\,s. On Pascal VOC 2007, which no model here was tuned on, it scores 0.858
-in 0.063\,s against 0.857 in 0.095\,s. On COCO-O, the same categories as sketches,
-paintings and other shifted images, it stays level with Moondream~3.1 (0.772 against
-0.781), where a YOLO11x that matches it on COCO falls to 0.520. The head finds fewer objects smaller than one
-feature-grid cell than Moondream~3.1 (recall 0.20 against 0.36); also reading a $2\times2$
-grid of tiles closes that gap and gives F1 0.718 on COCO, at 2.5 times the time. A
-second or third decoding step leaves F1 unchanged. Because a frame
-costs one pass however many categories are asked for, the head can detect continuously on
-streamed video.
+Small vision-language models (VLMs) have learned through their pretraining a deep
+understanding of the world, but when used for object detection they have to generate
+predictions one token at a time one prompt per category. Inspired by diffusion-based
+drafting models for text-based LLMs, we implement object detection as a one pass task. We
+extend a frozen Moondream~2 model (1.9B) with slots that a single forward pass fills to
+predict object positions using the model's existing coordinate, size and vocabulary heads
+read. We post-train low-rank adapters at the slot positions and an objectness layer with a
+Hungarian set loss on 46k COCO images, and 17.7k teacher-labelled images.
+
+We find that our model matches the Moondream~3.1 (9.3B) F1 score while taking less than
+half the time (0.091\,s vs 0.208\,s) on COCO val2017 images. On Pascal VOC 2007, which no
+model was tuned on, it scores 0.858 in 0.063\,s against 0.857 in 0.095\,s, suggesting that
+the model is using the general image understanding of the base model. While being slower
+than traditional, much smaller object detection models such as YOLO11x, we compare them on
+COCO-O, to demonstrate the robustness of the VLM-based approach. We find that our model
+can detect objects continuously across frames in streamed video, while maintaining
+quality.
+
+Our approach finds fewer objects smaller than Moondream~3.1 (recall 0.20 against 0.36),
+which we were able to close by implementing reading of a $2\times2$ grid of tiles at the
+cost of increased latency. This demonstrates this approach allows for a tradeoff between
+speed and accuracy. We show ablation about different parameters and give a log of
+different approaches that were implemented.
 \end{abstract}
 
 \section{Introduction}
@@ -68,29 +72,27 @@ VOC. The F1 axes differ between the panels.}
 \label{fig:speed}
 \end{figure*}
 
-Generalist VLMs localise objects through text: they emit Pix2Seq-style coordinate
-tokens~\citep{chen2022pix2seq}, as Kosmos-2~\citep{peng2023kosmos2},
-Florence-2~\citep{xiao2024florence2}, PaliGemma~\citep{beyer2024paligemma} and
-Moondream~\citep{moondream,moondream31} do. Decoding is sequential. Moondream~2's
-\texttt{detect} takes three decoder steps per box and one call per phrase, so an image
-with many categories or many objects costs many passes.
+Object detection has been one of the traditional applications of Machine Learning for
+over a decade~\citep{girshick2014rcnn,redmon2016yolo}. Vision Language Models also
+localise objects through text by emitting coordinate tokens~\citep{chen2022pix2seq}, but
+decoding is sequential and conditioned by prompts. Moondream~2's
+\texttt{detect}~\citep{moondream} takes three decoder steps per box and one call per
+phrase. Latency grows with categories and objects in the image. This makes VLMs unfit for
+fast object detection especially when there is no prompt given.
 
-Set prediction~\citep{carion2020detr} removes the sequence: a fixed number of queries
-each return a box or ``no object'' in one pass. It usually comes as a dedicated
-detector~\citep{liu2024groundingdino,minderer2022owlvit}. We ask whether post-training
-alone can give a small VLM such an output, \emph{n slots, each ``nothing'' or a box with
-a label}, so that one forward pass answers every category at once.
+Set prediction (DETR;~\citealp{carion2020detr}) uses a fixed number of queries who each
+return a box or ``no object'' in one pass to perform object detection. It is the basis of
+today's most accurate detectors, DETR and its descendants such as
+DINO~\citep{zhang2023dino} and of real-time variants such as
+RT-DETR~\citep{zhao2024rtdetr}.
 
-The idea came from language models that draft instead of writing left to right. Masked
-diffusion models~\citep{austin2021d3pm,sahoo2024mdlm,nie2025llada} and
-MaskGIT~\citep{chang2022maskgit} start from a sequence of blanks, fill every position in
-parallel and refine the draft over several steps. A box and its label are six tokens, so
-a set of boxes is a short sequence that could be drafted the same way. We expected
-detection to need a few refinement steps. It needs one: the first draft is as good as
-the third (Section~3), and that single step is what makes the head fast.
+Inspired by diffusion-based drafting models in modern language
+models~\citep{austin2021d3pm,sahoo2024mdlm,nie2025llada}, we ask whether a diffusion
+approach would allow a VLM to perform fast object detection.
 
 We append 48 slots to a frozen Moondream~2 and train about 50M adapter parameters
-(Section~2). The resulting head is level with Moondream~3.1, a 9.3B model, on COCO and VOC
+(Section~2). We find that one pass is enough and that additional diffusion passes do not
+improve detection quality. The resulting head is level with Moondream~3.1~\citep{moondream31}, a 9.3B model, on COCO and VOC
 in 2.3 and 1.5 times less time (Section~3, Fig.~\ref{fig:speed}). Its time does not
 depend on the number of categories, which makes detection on streamed video practical
 (Table~\ref{tab:video}). It finds fewer very small objects unless it also reads tiles,
@@ -168,22 +170,28 @@ output, on a Pascal VOC test image with the rank-128 head's detections.}
 \end{figure*}
 
 \begin{table*}[t]
-\centering\small\setlength{\tabcolsep}{4pt}
-\caption{COCO val2017 (500 images) and VOC 2007 test (1{,}000 images). Seconds per
-COCO image on one L40S with the categories present prompted (2.9 per image); last column:
-with all 80 categories asked, on 100 of the images. Slots is the rank-128 head trained on
-COCO and teacher-labelled images, at thresholds tuned on COCO; the models and names are
-those of Fig.~\ref{fig:speed}.}
+\centering\small\setlength{\tabcolsep}{6pt}
+\caption{F1 at IoU 0.5 on four test sets, and seconds per COCO image on one L40S.
+\emph{COCO}: 500 val2017 images. \emph{VOC}: 1{,}000 Pascal VOC 2007 test images, which
+no model was tuned on. \emph{COCO-O}: 6{,}782 human-labelled sketches, cartoons, paintings
+and other shifted images of COCO's categories. \emph{Generated}: 3{,}950 images we
+generated in 88 photographic and artistic media and labelled with the teacher. Every
+model is prompted with the categories present in each image; thresholds are tuned on
+COCO. With tiles, the head also reads a $2\times2$ grid of overlapping crops of the image
+in the same batch. Precision, recall and F1 at IoU 0.75 on COCO are in
+Appendix~\ref{app:coco}. Cells marked $\ast$ are being measured.}
 \label{tab:main}
-\begin{tabular}{@{}lcccccrr@{}}
+\begin{tabular}{@{}lccccr@{}}
 \toprule
-Model & COCO P & COCO R & COCO F1$_{.5}$ & COCO F1$_{.75}$ & VOC F1$_{.5}$ & s/img & s/img, 80 \\
+Model & COCO & VOC & COCO-O & Generated & s/img \\
 \midrule
-Moondream 2 \texttt{detect} (1.9B) & .501 & .706 & .586 & .450 & .851 & .220 & 1.52 \\
-Moondream 3.1 (9.3B MoE) & .682 & \textbf{.719} & .700 & .560 & .857 & .208 & 2.67 \\
+Moondream 2 \texttt{detect} & .586 & .851 & .773 & $\ast$ & .220 \\
+Moondream 3.1 & .700 & .857 & \textbf{.781} & \textbf{.795} & .208 \\
 \midrule
-Slots, fast & \textbf{.811} & .626 & .707 & .566 & .858 & \textbf{.091} & \textbf{.082} \\
-Slots, tiled & .743 & .695 & \textbf{.718} & \textbf{.586} & .844 & .229 & -- \\
+Slots, rank 64 & .705 & .840 & $\ast$ & $\ast$ & \textbf{.091} \\
+Slots, rank 64, with tiles & .714 & .841 & $\ast$ & $\ast$ & .226 \\
+Slots, rank 128 & .707 & \textbf{.858} & .772 & .786 & \textbf{.091} \\
+Slots, rank 128, with tiles & \textbf{.718} & .844 & $\ast$ & $\ast$ & .229 \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -381,28 +389,30 @@ objects under one feature-grid cell is 0.20 against Moondream~3.1's 0.36. All ti
 one GPU type, an L40S, and the test sets are samples of 500 and 1{,}000 images.
 
 \section{Conclusion}
-A frozen 1.9B VLM with a 50--100M-parameter slot adapter detects every category in one
-pass at the F1 of a 9.3B model, in under half its time on COCO and two thirds of it on VOC.
-The larger consequence is for video. A frame costs one pass whatever is asked for, so
-detection can run continuously: at 0.10\,s per detection, detecting every third frame
-keeps pace with 30\,fps, and on two MOT17 sequences the fast head is ahead of
-Moondream~3.1 (F1 0.447 against 0.429) at half its time. A light tracker on top cuts the
-boxes lost between frames on MOT17-02 from 18\% to 12\% at no cost in time. We think detection on
-streamed video is the most promising use of this work.
+We asked whether a small vision-language model could detect objects the way a diffusion
+language model drafts text, and found that a single drafting step is enough. A frozen
+Moondream~2 (1.9B) extended with 48 slots and a post-trained adapter of 50--100M
+parameters returns every object of every category in one forward pass. It matches the F1
+of Moondream~3.1 (9.3B) on COCO and on Pascal VOC, while being significantly faster and
+maintaining static inference time regardless of the number of categories. It maintains
+the robustness of the backbone it uses: on the shifted images of COCO-O it stays within a
+point of Moondream~3.1, while a dedicated detector with the same COCO accuracy loses a
+quarter of its F1. The most promising use we see for the model is continuously on
+streamed video, because of its static inference time that is below 100\,ms.
 
-\section{Possible directions}
-\begin{itemize}
-\item \emph{Slots across frames.} Give the previous frame's boxes and labels as revealed
-positions, the conditioning the denoising pass trains, so that slots keep their objects
-and the head tracks as it detects rather than linking boxes afterwards.
-\item \emph{Less work per frame.} Reuse the vision encoder's features and the image
-prefix where the scene has not changed, and tile only where small candidates appear.
-\item \emph{Tracking measures.} Evaluate on full sequences with identity switches and
-HOTA rather than per-frame F1.
-\item \emph{Small objects without tiles,} which today cost 2.5 times the time.
-\item \emph{Open-vocabulary labels,} where decoding a label in several steps may matter.
-\item \emph{A cheaper vision encoder,} since it dominates the time of a pass.
-\end{itemize}
+\section{Future work}
+The most direct extension is to carry slots across video frames. The denoising pass
+already trains the head to complete a set of boxes of which some positions are revealed;
+giving it the previous frame's boxes and labels as those positions would let each slot
+keep its object, so that the model tracks as it detects instead of linking boxes
+afterwards, and such a model should be evaluated on full sequences with identity-aware
+measures such as HOTA rather than per-frame F1. A second direction is cost per frame: the
+vision encoder dominates the time of a pass, so reusing its features where the scene has
+not changed, tiling only where small candidates appear, or replacing it with a cheaper
+encoder would each bring the model closer to dedicated detectors, and would remove the
+2.5-fold cost that small objects carry today. Finally, the head is limited to COCO's 80
+categories. Open-vocabulary labels are longer than three tokens, and it is there that
+decoding in more than one step, which did not help here, may begin to matter.
 
 \bibliographystyle{plainnat}\bibliography{references}
 
@@ -474,6 +484,28 @@ Moondream 3.1 & .816 & .291 & .429 & .206 \\
 Slots r128, fast & .652 & .341 & .447 & .104 \\
 Slots r128, tiled & .559 & \textbf{.446} & \textbf{.496} & .418 \\
 Slots r64, COCO only, fast & \textbf{.851} & .241 & .376 & \textbf{.087} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{COCO in detail}\label{app:coco}
+
+\begin{table}[h]
+\centering\small\setlength{\tabcolsep}{5pt}
+\caption{The models of Table~\ref{tab:main} on the 500 COCO val2017 images: precision,
+recall and F1 at IoU 0.5, F1 at IoU 0.75, and recall of objects smaller than one cell of
+the $27\times27$ feature grid.}
+\label{tab:coco}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Model & Precision & Recall & F1$_{.5}$ & F1$_{.75}$ & Recall $<$1 cell \\
+\midrule
+Moondream 2 \texttt{detect} & .501 & .706 & .586 & .450 & -- \\
+Moondream 3.1 & .682 & \textbf{.719} & .700 & .560 & .36 \\
+Slots, rank 64 & .779 & .644 & .705 & .555 & .23 \\
+Slots, rank 64, with tiles & .763 & .670 & .714 & \textbf{.589} & .33 \\
+Slots, rank 128 & \textbf{.811} & .626 & .707 & .566 & .20 \\
+Slots, rank 128, with tiles & .743 & .695 & \textbf{.718} & .586 & \textbf{.37} \\
 \bottomrule
 \end{tabular}
 \end{table}
