@@ -765,6 +765,70 @@ smaller, and YOLO11x matches its COCO F1. On VOC the slot head's selection count
 truck as a car, as VOC's labels do; the YOLO runs record boxes of the prompted
 categories only, so their VOC F1 is without that. Parameter counts are Ultralytics'.
 
+### Shifted images: COCO-O
+
+COCO-O (Mao et al., ICCV 2023) holds 6,782 images of COCO's 80 categories in six domains
+far from COCO's photos, with 26,624 human-labelled boxes. The archive is on the volume
+under `datasets/`; the dataset kind `coco_json` reads a COCO-format annotation file and its
+images from it (`configs/coco-o-*.json`, all images of every domain). Each model runs at the
+threshold tuned on COCO, on one L40S; F1 at IoU 0.5 (runs `coco-o-*`):
+
+| Model | COCO val | COCO-O | P / R on COCO-O | sketch | cartoon | painting | weather | handmake | tattoo |
+|---|---|---|---|---|---|---|---|---|---|
+| Moondream 3.1 | 0.700 | 0.781 | 0.773 / 0.789 | 0.791 | 0.771 | 0.752 | 0.783 | 0.824 | 0.809 |
+| Moondream 2 | 0.586 | 0.773 | 0.762 / 0.785 | 0.810 | 0.768 | 0.732 | 0.767 | 0.817 | 0.783 |
+| Slots, rank 128, fast | 0.707 | 0.772 | 0.807 / 0.739 | 0.786 | 0.780 | 0.746 | 0.774 | 0.757 | 0.795 |
+| Slots, rank 64, 4 bits, one crop | 0.654 | 0.721 | 0.817 / 0.645 | 0.727 | 0.736 | 0.695 | 0.731 | 0.705 | 0.710 |
+| YOLO11x | 0.715 | 0.520 | 0.812 / 0.382 | 0.377 | 0.403 | 0.634 | 0.751 | 0.455 | 0.273 |
+| YOLO11n | 0.612 | 0.410 | 0.731 / 0.285 | 0.283 | 0.311 | 0.520 | 0.595 | 0.365 | 0.202 |
+
+The slot head keeps the frozen backbone's robustness: it stays within a point of Moondream
+3.1, as on COCO and VOC, while YOLO11x, level with it on COCO, falls 25 points behind.
+YOLO's precision holds and its recall halves; on photos in bad weather it stays close
+(0.751 against 0.774) and on drawn or made objects it does not. COCO-O's images hold
+fewer and larger objects than COCO's, so a model's two columns are not comparable; the
+rows within a column are. Rounding the backbone to 4 bits costs 5 points here, as on COCO.
+
+### Generated images labelled by the teacher
+
+`crescent_moon.images` generates images through fal.ai (FLUX schnell) from prompts that
+name one to four COCO categories and fill a template from the config's lists (`scene`),
+and `crescent_moon.teacher` labels them with Gemini 4 Carbon; the dataset kind `labelled`
+evaluates against those labels. `configs/generated-images.json`: 1,000 photo-style scenes
+(20 places, 12 conditions, 8 photo styles), 8,811 labelled objects, 5.81 USD of labelling
+(private HF dataset `jfrick/crescent-moon-generated-carbon`). Runs `generated-*`:
+
+| Model | Precision | Recall | F1 |
+|---|---|---|---|
+| Moondream 3.1 | 0.885 | 0.851 | 0.868 |
+| Slots, rank 128, fast | 0.854 | 0.821 | 0.837 |
+| Slots, rank 64, 4 bits, one crop | 0.876 | 0.738 | 0.801 |
+| YOLO11x | 0.879 | 0.715 | 0.788 |
+| YOLO11n | 0.816 | 0.560 | 0.664 |
+
+The truth here is the teacher's, and the slot heads were trained partly on its labels of
+other images, so this table favours them over YOLO in a way COCO-O's human labels do not.
+
+### The 4-bit head against YOLO in a browser
+
+`web/tests/yolo.test.js` runs YOLO's ONNX files (640 x 640 input, exported by
+`modal_app.py::yolo_onnx`) through ONNX Runtime Web's WebGPU backend in the same Chromium
+as the `bench` suite; its time covers the network and reading its output, not box decoding
+or non-maximum suppression. Seconds per frame, median of warm frames:
+
+| Model | Download | L4 (run `web-bench-yolo-l4`) | GitHub macOS runner, Apple GPU |
+|---|---|---|---|
+| YOLO11n | 10 MB | 0.031 | 0.033 |
+| YOLO11x | 217 MB | 0.058 | 0.163 |
+| Slots, 4 bits, one crop | 1.1 GB | 0.75 | 2.2 |
+
+YOLO11n is 24 times faster than the browser's slot detector on the L4 and 67 times on the
+Apple GPU, at a hundredth of the download. In accuracy the 4-bit head is 6 points behind
+YOLO11x on COCO val (0.654 against 0.715), 20 ahead on COCO-O and level on the generated
+photos (tables above). One macOS run lost its GPU device during the kernel timing and
+reported times of a lost device (0.04 s per frame); `tune` now stops when the device is
+lost, and the rerun measured 2.2 s with all 36 reference checks passing.
+
 ### Crops for the current head
 
 `slots-teacher-coco-rank64` at threshold 0.29 without tiles, with the vision encoder
