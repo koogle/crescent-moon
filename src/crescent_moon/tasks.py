@@ -227,6 +227,42 @@ def coco_json_samples(annotations, images, seed, folder):
     ]
 
 
+def labelled_samples(replies, images, seed, folder):
+    """Prompt each sampled image with the categories a teacher labelled in it.
+
+    `replies` are the records `crescent_moon.teacher` writes ({"image_id", "width",
+    "height", "objects": [{"label", "box"}]}, boxes in pixels); `folder` holds
+    `<image_id>.jpg`. The teacher's boxes are the truth, so the scores measure agreement
+    with it."""
+    rows = sorted(
+        (r for r in replies if "error" not in r and r["objects"]), key=lambda r: r["image_id"]
+    )
+    samples = []
+    for row in random.Random(seed).sample(rows, min(images, len(rows))):
+        by_label = defaultdict(list)
+        for obj in row["objects"]:
+            by_label[obj["label"]].append(obj["box"])
+        samples.append(
+            {
+                "image_id": row["image_id"],
+                "image": f"{folder}/{row['image_id']}.jpg",
+                "width": row["width"],
+                "height": row["height"],
+                "queries": [
+                    {
+                        "phrase": name,
+                        "kind": "present",
+                        "boxes": boxes,
+                        "exhaustive": True,
+                        "group": "",
+                    }
+                    for name, boxes in sorted(by_label.items())
+                ],
+            }
+        )
+    return samples
+
+
 # Pascal VOC's 20 categories under their COCO names, so every model is prompted the same
 # way on both datasets.
 VOC_TO_COCO = {

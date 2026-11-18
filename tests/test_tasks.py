@@ -3,6 +3,7 @@ from crescent_moon.tasks import (
     COCO_NAMES,
     coco_json_samples,
     coco_samples,
+    labelled_samples,
     lvis_samples,
     refcoco_m_samples,
 )
@@ -223,3 +224,21 @@ def test_coco_json_samples_group_boxes_by_category():
     assert sample["image"] == "set/a.jpeg"
     assert [q["phrase"] for q in sample["queries"]] == ["car", "person"]
     assert sample["queries"][0]["boxes"] == [[10, 5, 30, 15], [50, 5, 60, 15]]
+
+
+def test_labelled_samples_prompt_the_labelled_categories():
+    replies = [
+        {"image_id": "generated/00001", "error": "timeout"},
+        {
+            "image_id": "generated/00002",
+            "width": 10,
+            "height": 8,
+            "objects": [
+                {"label": "dog", "box": [0, 0, 4, 4]},
+                {"label": "dog", "box": [5, 5, 9, 7]},
+            ],
+        },
+    ]
+    (sample,) = labelled_samples(replies, images=5, seed=0, folder="/data")
+    assert sample["image"] == "/data/generated/00002.jpg"
+    assert sample["queries"][0]["phrase"] == "dog" and len(sample["queries"][0]["boxes"]) == 2

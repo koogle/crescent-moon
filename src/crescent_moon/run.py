@@ -20,6 +20,7 @@ from crescent_moon.metrics import summarize
 from crescent_moon.tasks import (
     coco_json_samples,
     coco_samples,
+    labelled_samples,
     lvis_samples,
     mot_samples,
     refcoco_m_samples,
@@ -97,6 +98,11 @@ def build_samples(config, image_folder, files=hub_files):
             built = mot_dataset_samples(dataset, image_folder)
         elif dataset["kind"] == "voc":
             built = voc_tar_samples(paths[0], dataset, config["seed"], image_folder)
+        elif dataset["kind"] == "labelled":
+            replies = [json.loads(line) for line in Path(paths[0]).read_text().splitlines()]
+            built = labelled_samples(
+                replies, dataset["images"], config["seed"], dataset["image_folder"]
+            )
         elif dataset["kind"] == "coco_json":
             built = coco_zip_samples(paths[0], dataset, config["seed"], image_folder)
         else:

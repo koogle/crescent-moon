@@ -15,6 +15,9 @@ the manifest is skipped, so an interrupted run continues.
 - COCO (`detection-datasets/coco`, Parquet): every image with at least one annotated
   object in the listed training shards, in shard order, named by its COCO image id, so
   a teacher's labels can be set against COCO's own on the same images.
+- Generated (a text-to-image model on fal.ai): one image per prompt that names one to
+  four COCO categories in a place, condition and style drawn from the config's lists; the
+  manifest line keeps the prompt and the categories it names.
 """
 
 import argparse
@@ -149,6 +152,62 @@ def coco(settings, out, quota, max_side, existing):
                     yield line
 
 
+FAL = "https://fal.run/"
+
+
+def scene(settings, rng):
+    """One prompt of the generated source and the categories it names: one to
+    `max_categories` COCO categories, some of them several times, in one of the
+    settings' places, conditions and styles."""
+    from crescent_moon.tasks import COCO_NAMES
+
+    asked = rng.sample(COCO_NAMES, rng.randint(1, settings["max_categories"]))
+    counts = [rng.choice(settings["counts"]) for _ in asked]
+    things = [f"{count} {name}".strip() for count, name in zip(counts, asked, strict=True)]
+    listed = things[0] if len(things) == 1 else ", ".join(things[:-1]) + " and " + things[-1]
+    prompt = (
+        f"{rng.choice(settings['styles'])} of {listed} {rng.choice(settings['places'])}, "
+        f"{rng.choice(settings['conditions'])}"
+    )
+    return prompt, asked
+
+
+def generated(settings, out, quota, max_side, rng, existing):
+    """Images from a text-to-image model on fal.ai (`settings["model"]`), one per `scene`;
+    the manifest line keeps the prompt and the categories it names. The key is read from
+    the FAL_KEY environment variable."""
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
+    key = os.environ["FAL_KEY"]
+    scenes = [scene(settings, rng) for _ in range(settings["images"])]
+    wanted = [(i, s) for i, s in enumerate(scenes) if f"generated/{i:05d}" not in existing]
+
+    def one(job):
+        index, (prompt, _) = job
+        body = {"prompt": prompt, "seed": index, "num_images": 1, **settings["request"]}
+        request = urllib.request.Request(
+            FAL + settings["model"],
+            data=json.dumps(body).encode(),
+            headers={"Authorization": f"Key {key}", "Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                url = json.load(response)["images"][0]["url"]
+            with urllib.request.urlopen(url, timeout=180) as response:
+                return response.read()
+        except (OSError, KeyError, IndexError, ValueError):
+            return None
+
+    with ThreadPoolExecutor(settings.get("workers", 8)) as pool:
+        for (index, (prompt, asked)), data in zip(
+            wanted[:quota], pool.map(one, wanted[:quota]), strict=True
+        ):
+            line = data and save(data, out, "generated", f"{index:05d}", max_side, existing)
+            if line:
+                yield line | {"prompt": prompt, "asked": asked}
+
+
 def prepare(config, out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -164,6 +223,7 @@ def prepare(config, out):
         "openimages": lambda s, q: open_images(s, out, q, config["max_side"], rng, existing),
         "objects365": lambda s, q: objects365(s, out, q, config["max_side"], existing),
         "coco": lambda s, q: coco(s, out, q, config["max_side"], existing),
+        "generated": lambda s, q: generated(s, out, q, config["max_side"], rng, existing),
     }
     for source, settings in config["sources"].items():
         quota = settings["images"] - counts.get(source, 0)

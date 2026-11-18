@@ -1,0 +1,18 @@
+{
+  "seed": 20261112,
+  "model": {
+    "adapter": "yolo",
+    "name": "yolo11n.pt"
+  },
+  "datasets": [
+    {
+      "name": "generated_carbon",
+      "kind": "labelled",
+      "files": [
+        "/runs/generated/google--gemini-4-carbon.jsonl"
+      ],
+      "image_folder": "/runs/generated/images",
+      "images": 1000
+    }
+  ]
+}

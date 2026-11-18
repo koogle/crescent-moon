@@ -1,0 +1,70 @@
+{
+  "seed": 20261118,
+  "max_side": 1024,
+  "sources": {
+    "generated": {
+      "images": 1000,
+      "model": "fal-ai/flux/schnell",
+      "request": {
+        "image_size": "landscape_4_3",
+        "num_inference_steps": 4
+      },
+      "workers": 8,
+      "max_categories": 4,
+      "counts": [
+        "a",
+        "a",
+        "a",
+        "two",
+        "three",
+        "several"
+      ],
+      "styles": [
+        "A photo",
+        "A candid photo",
+        "A wide-angle photo",
+        "A close-up photo",
+        "An aerial photo",
+        "A documentary photograph",
+        "A realistic photo",
+        "A photo from a low angle"
+      ],
+      "places": [
+        "on a city street",
+        "in a kitchen",
+        "in a living room",
+        "in a park",
+        "on a beach",
+        "in an office",
+        "at a market",
+        "in a parking lot",
+        "on a farm",
+        "in a classroom",
+        "at a train station",
+        "in a garage",
+        "on a mountain trail",
+        "in a restaurant",
+        "in a backyard",
+        "at an airport",
+        "in a bedroom",
+        "by a lake",
+        "in a warehouse",
+        "on a playground"
+      ],
+      "conditions": [
+        "at noon",
+        "at dusk",
+        "at night under street lights",
+        "in heavy rain",
+        "in fog",
+        "in snow",
+        "in harsh sunlight",
+        "on an overcast day",
+        "cluttered with other things",
+        "seen from far away",
+        "partly hidden behind other things",
+        "in a crowded scene"
+      ]
+    }
+  }
+}
