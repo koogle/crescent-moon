@@ -81,6 +81,7 @@ def build_samples(config, image_folder, files=hub_files):
                 dataset["images"],
                 config["seed"],
                 exclude_images=dataset.get("exclude_images", 0),
+                categories=dataset.get("categories"),
             )
             extract_images(paths, built, image_folder)
         elif dataset["kind"] == "refcoco_m":

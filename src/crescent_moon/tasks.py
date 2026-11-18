@@ -157,13 +157,15 @@ def lvis_samples(annotations, images, max_absent, seed):
     return samples
 
 
-def coco_samples(rows, images, seed, names=COCO_NAMES, exclude_images=0):
+def coco_samples(rows, images, seed, names=COCO_NAMES, exclude_images=0, categories=None):
     """Prompt each COCO image with the categories annotated in it.
 
     `rows` follow detection-datasets/coco: `objects` holds parallel `category`
     indices into `names` and `bbox` as [x0, y0, x1, y1]. `exclude_images` leaves out
     the images that a sample of that size with the same seed would take, so a tuning
-    split never overlaps the evaluation split.
+    split never overlaps the evaluation split. `categories` prompts each image with
+    exactly that many: its annotated ones first (the lowest indices when it has more),
+    then absent ones drawn with the seed, to measure time against the number asked.
     """
     rows = [row for row in sorted(rows, key=lambda row: row["image_id"]) if row["objects"]["bbox"]]
     if exclude_images:
@@ -175,6 +177,11 @@ def coco_samples(rows, images, seed, names=COCO_NAMES, exclude_images=0):
         by_category = defaultdict(list)
         for category, box in zip(row["objects"]["category"], row["objects"]["bbox"], strict=True):
             by_category[category].append(list(box))
+        asked = sorted(by_category.items())
+        if categories is not None:
+            absent = [c for c in range(len(names)) if c not in by_category]
+            more = rng.sample(absent, max(0, categories - len(asked)))
+            asked = asked[:categories] + [(category, []) for category in sorted(more)]
         samples.append(
             {
                 "image_id": row["image_id"],
@@ -184,12 +191,12 @@ def coco_samples(rows, images, seed, names=COCO_NAMES, exclude_images=0):
                 "queries": [
                     {
                         "phrase": names[category],
-                        "kind": "present",
+                        "kind": "present" if boxes else "absent",
                         "boxes": boxes,
                         "exhaustive": True,
                         "group": "",
                     }
-                    for category, boxes in sorted(by_category.items())
+                    for category, boxes in asked
                 ],
             }
         )

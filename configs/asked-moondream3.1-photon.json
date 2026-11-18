@@ -1,0 +1,88 @@
+{
+  "seed": 20261112,
+  "model": {
+    "adapter": "photon",
+    "name": "moondream3.1-9B-A2B",
+    "max_objects": 150
+  },
+  "datasets": [
+    {
+      "name": "coco_val2017_asked_1",
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/val-00000-of-00002-c4f2e391ee4aba11.parquet",
+        "data/val-00001-of-00002-7af5414a3b178949.parquet"
+      ],
+      "images": 100,
+      "categories": 1
+    },
+    {
+      "name": "coco_val2017_asked_5",
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/val-00000-of-00002-c4f2e391ee4aba11.parquet",
+        "data/val-00001-of-00002-7af5414a3b178949.parquet"
+      ],
+      "images": 100,
+      "categories": 5
+    },
+    {
+      "name": "coco_val2017_asked_10",
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/val-00000-of-00002-c4f2e391ee4aba11.parquet",
+        "data/val-00001-of-00002-7af5414a3b178949.parquet"
+      ],
+      "images": 100,
+      "categories": 10
+    },
+    {
+      "name": "coco_val2017_asked_20",
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/val-00000-of-00002-c4f2e391ee4aba11.parquet",
+        "data/val-00001-of-00002-7af5414a3b178949.parquet"
+      ],
+      "images": 100,
+      "categories": 20
+    },
+    {
+      "name": "coco_val2017_asked_40",
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/val-00000-of-00002-c4f2e391ee4aba11.parquet",
+        "data/val-00001-of-00002-7af5414a3b178949.parquet"
+      ],
+      "images": 100,
+      "categories": 40
+    },
+    {
+      "name": "coco_val2017_asked_80",
+      "kind": "coco",
+      "repo": "detection-datasets/coco",
+      "repo_type": "dataset",
+      "revision": "cf0b22332314a937e9dc8a1957b21725430bb41d",
+      "files": [
+        "data/val-00000-of-00002-c4f2e391ee4aba11.parquet",
+        "data/val-00001-of-00002-7af5414a3b178949.parquet"
+      ],
+      "images": 100,
+      "categories": 80
+    }
+  ]
+}

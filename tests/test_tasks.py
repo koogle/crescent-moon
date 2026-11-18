@@ -180,3 +180,21 @@ def test_mot_samples_take_people_on_every_nth_frame():
     assert [s["image_id"] for s in samples] == ["MOT17-09/000001", "MOT17-09/000004"]
     assert samples[0]["queries"][0]["boxes"] == [[10.0, 20.0, 20.0, 40.0], [50.0, 50.0, 55.0, 55.0]]
     assert samples[0]["image"] == "mot17/MOT17-09/000001.jpg"
+
+
+def test_coco_samples_ask_a_set_number_of_categories():
+    rows = [
+        {
+            "image_id": 1,
+            "width": 10,
+            "height": 10,
+            "objects": {"category": [3, 5], "bbox": [[0, 0, 1, 1], [1, 1, 2, 2]]},
+        }
+    ]
+    (sample,) = coco_samples(rows, images=1, seed=0, categories=6)
+    kinds = [q["kind"] for q in sample["queries"]]
+    assert kinds == ["present", "present", "absent", "absent", "absent", "absent"]
+    assert len({q["phrase"] for q in sample["queries"]}) == 6
+    (one,) = coco_samples(rows, images=1, seed=0, categories=1)
+    assert [q["phrase"] for q in one["queries"]] == [COCO_NAMES[3]]
+    assert coco_samples(rows, images=1, seed=0) == coco_samples(rows, images=1, seed=0)
