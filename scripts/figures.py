@@ -5,7 +5,7 @@
 Reads `<artifacts>/<run>/heldout.jsonl` for the training runs and
 `<artifacts>/<run>/summary.json` and `predictions.jsonl` for the COCO evaluations, and
 writes `training.png`, `training-small-objects.png`, `coco.png`, `recall-by-size.png`,
-`precision-recall.png`, `areas.png`, `speed.png`
+`precision-recall.png`, `areas.png`, `speed.png`, `asked.png`
 and three `examples*.png` grids.
 """
 
@@ -810,7 +810,7 @@ def selection_area_figure(artifacts, out):
 # Moondream's single operating point per dataset (F1 at IoU 0.5), for reference lines.
 MOONDREAM_F1 = {
     "coco": (
-        ("Moondream 2", "moondream2-001", "coco_val2017"),
+        ("Moondream 2", "moondream2-photon-001", "coco_val2017"),
         ("Moondream 3.1", "moondream31-001", "coco_val2017"),
     ),
     "voc": (
@@ -939,9 +939,11 @@ ASKED_SERIES = [
 ]
 
 
-def asked_panel(axis, artifacts):
-    """Seconds per image against the number of categories asked, on log axes."""
-    style(axis, "COCO val2017, 100 images: time against categories asked")
+def asked_figure(artifacts, out):
+    """Seconds per image against the number of categories asked, on log axes, sized for
+    one column of the paper."""
+    figure, axis = plt.subplots(figsize=(5.4, 3.9), facecolor=SURFACE)
+    style(axis, "COCO val2017, 100 images")
     axis.grid(axis="x", color=GRID, linewidth=0.8)
     for label, colour, marker, run in ASKED_SERIES:
         datasets = json.loads((artifacts / run / "summary.json").read_text())["datasets"]
@@ -971,17 +973,19 @@ def asked_panel(axis, artifacts):
     axis.minorticks_off()
     axis.set_xlabel("Categories asked per image", fontsize=9, color=MUTED)
     axis.set_ylabel("Seconds per image on one L40S", fontsize=9, color=MUTED)
+    figure.tight_layout()
+    figure.savefig(out / "asked.png", dpi=220, facecolor=SURFACE)
+    plt.close(figure)
 
 
 def speed_figure(artifacts, out):
-    """Left and middle: F1 at IoU 0.5 against seconds per image on COCO and VOC, for
+    """F1 at IoU 0.5 against seconds per image on COCO and VOC, for
     Moondream 2 and 3.1 and the rank-128 slot head, fast and tiled, each timed on one
-    L40S; the arrow gives the time of Moondream 3.1 over the fast head's. Right:
-    `asked_panel`."""
+    L40S; the arrow gives the time of Moondream 3.1 over the fast head's."""
     heads = dict(selection_rows(artifacts, {s[0] for *_, s, _ in SPEED_POINTS if s}))
-    figure, axes = plt.subplots(1, 3, figsize=(15.5, 4.1), facecolor=SURFACE)
+    figure, axes = plt.subplots(1, 2, figsize=(11, 4.1), facecolor=SURFACE)
     for axis, (name, dataset, test, title, limits, ratio_dy) in zip(
-        axes, SPEED_PANELS, strict=False
+        axes, SPEED_PANELS, strict=True
     ):
         style(axis, title)
         axis.grid(axis="x", color=GRID, linewidth=0.8)
@@ -1035,38 +1039,27 @@ def speed_figure(artifacts, out):
         axis.set_ylim(*limits)
         axis.set_xlabel("Seconds per image on one L40S", fontsize=9, color=MUTED)
     axes[0].set_ylabel("F1 at IoU 0.5", fontsize=9, color=MUTED)
-    asked_panel(axes[2], artifacts)
     figure.tight_layout()
     figure.savefig(out / "speed.png", dpi=200, facecolor=SURFACE)
     plt.close(figure)
 
 
-# Precision-recall curves under the current selection: the approaches compared against
-# Moondream's single operating points. (label, run, colour token index)
+# Precision-recall curves under the current selection, full image only: what the training
+# data and the weights' precision do to the head, against Moondream's operating points.
+# (label, run, colour, line width). The rank-128 head is "Slots, fast" in the other charts.
 CURVE_SERIES = [
-    ("COCO only, 46k", "slots-rank64", 3),
-    ("COCO + Carbon, rank 64", "slots-teacher-coco-rank64", 1),
-    ("COCO + Carbon, rank 128", "slots-teacher-coco-rank128", 2),
-    ("+ tile crops, rank 64", "slots-tilecrops-teacher-coco-rank64", 7),
-    ("Rank 64 on 4-bit weights, trained on full precision", "slots-teacher-coco-rank64-w4", 4),
-    ("Rank 64 on 4-bit weights, trained on them", "slots-teacher-coco-rank64-w4-head", 6),
+    ("Slots, COCO only (rank 64)", "slots-rank64", AQUA, 1.8),
+    ("Slots, COCO + Carbon labels (rank 64)", "slots-teacher-coco-rank64", ORANGE, 1.8),
+    ("Slots, COCO + Carbon labels (rank 128)", "slots-teacher-coco-rank128", RED, 2.6),
+    ("Rank 64 on 4-bit weights", "slots-teacher-coco-rank64-w4", VIOLET, 1.8),
 ]
-CURVE_COLOURS = {
-    1: BLUE,
-    2: ORANGE,
-    3: AQUA,
-    4: YELLOW,
-    5: GREY,
-    6: VIOLET,
-    7: MAGENTA,
-    8: GREEN,
-}
+MOONDREAM_COLOURS = {"Moondream 2": BLUE, "Moondream 3.1": YELLOW}
 
 
 def selection_pr_figure(artifacts, out, images):
-    """Precision against recall at IoU 0.5 of each approach under the current selection,
-    without and with tiles, on COCO and VOC, with Moondream's operating points; each
-    head's dot is its threshold tuned on COCO. `images` holds the evaluation images
+    """Precision against recall at IoU 0.5 of the heads in CURVE_SERIES under the current
+    selection, from the full image, on COCO and VOC, with Moondream's operating points;
+    each head's dot is its threshold tuned on COCO. `images` holds the evaluation images
     (for their sizes)."""
     import sys
 
@@ -1078,86 +1071,65 @@ def selection_pr_figure(artifacts, out, images):
     ]
     sizes = image_sizes(configs, images)
     aliases = {"voc2007_test": {"car": ["car", "truck"]}}
-    figure, axes = plt.subplots(2, 2, figsize=(15, 12.5), facecolor=SURFACE)
+    setting = {"tile_max_cells": None, "merge": "fuse", "duplicate_iou": 0.5, "box_power": 0.25}
+    figure, axes = plt.subplots(1, 2, figsize=(13, 5.6), facecolor=SURFACE)
     panels = (
-        ("coco", "coco_val2017", "COCO val2017"),
-        ("voc", "voc2007_test", "Pascal VOC 2007 test"),
+        ("coco", "coco_val2017", "COCO val2017, 500 images", (0.4, 0.8), 0.4),
+        ("voc", "voc2007_test", "Pascal VOC 2007 test, 1,000 images", (0.6, 1.0), 0.6),
     )
-    for row, (split, dataset, title) in enumerate(panels):
-        for col, (mode, tiles) in enumerate(SELECTION_MODES):
-            axis = axes[row][col]
-            style(axis, f"{title}, {'with 2x2 tiles' if tiles else 'full image only'}")
-            axis.grid(axis="x", color=GRID, linewidth=0.8)
-            for label, run, colour in CURVE_SERIES:
-                path = artifacts / f"{run}-{split}-tiles2" / "predictions.jsonl"
-                study = artifacts / f"{run}-selection.json"
-                if not path.exists() or not study.exists():
-                    continue
-                setting = {
-                    "tile_max_cells": tiles,
-                    "merge": "fuse",
-                    "duplicate_iou": 0.5,
-                    "box_power": 0.25,
-                }
-                tuned = [
-                    r for r in json.loads(study.read_text())["results"] if r["setting"] == setting
-                ]
-                records = apply(load(path), setting, aliases, sizes)
-                precision, recall, _ = ranked_curve(records)
-                ap = ranked_ap(records)["pooled_ap"]
-                axis.plot(
-                    recall,
-                    precision,
-                    color=CURVE_COLOURS[colour],
-                    linewidth=1.8,
-                    label=f"{label}, area {ap:.3f}",
-                )
-                if tuned:
-                    point = summarize(above(records, tuned[0]["threshold"]))[dataset]["detection"][
-                        "iou_0.5"
-                    ]
-                    axis.scatter(
-                        [point["recall"]],
-                        [point["precision"]],
-                        s=45,
-                        color=CURVE_COLOURS[colour],
-                        edgecolor=SURFACE,
-                        linewidth=1.5,
-                        zorder=3,
-                    )
-            for name, run, md_dataset in MOONDREAM_F1[split]:
-                path = artifacts / run / "predictions.jsonl"
-                if not path.exists():
-                    continue
-                records = [r for r in read_records(path) if r["dataset"] == md_dataset]
-                point = summarize(records)[md_dataset]["detection"]["iou_0.5"]
-                axis.scatter(
-                    [point["recall"]],
-                    [point["precision"]],
-                    s=130,
-                    marker="D",
-                    color=INK if name == "Moondream 3.1" else MUTED,
-                    edgecolor=SURFACE,
-                    linewidth=2,
-                    zorder=4,
-                    label=f"{name} (one point, F1 {point['f1']:.3f})",
-                )
-            axis.set_xlabel("Recall", fontsize=9, color=MUTED)
-            axis.set_ylabel("Precision", fontsize=9, color=MUTED)
-            low = 0.4 if split == "coco" else 0.6
-            axis.set_xlim(low, 0.8 if split == "coco" else 1.0)
-            axis.set_ylim(0.4 if split == "coco" else 0.6, 1.0)
-            axis.legend(frameon=False, fontsize=8, labelcolor=INK, loc="lower left")
-    axes[0][1].annotate(
-        "Dots: each head at its threshold tuned on COCO. Diamonds: Moondream, which gives no "
-        "confidence and so one point.",
-        (0.99, 0.99),
-        xycoords="axes fraction",
-        ha="right",
-        va="top",
-        fontsize=8,
-        color=MUTED,
-    )
+    for axis, (split, dataset, title, across, low) in zip(axes, panels, strict=True):
+        style(axis, title)
+        axis.grid(axis="x", color=GRID, linewidth=0.8)
+        for label, run, colour, width in CURVE_SERIES:
+            records = apply(
+                load(artifacts / f"{run}-{split}-tiles2" / "predictions.jsonl"),
+                setting,
+                aliases,
+                sizes,
+            )
+            study = json.loads((artifacts / f"{run}-selection.json").read_text())["results"]
+            (tuned,) = [r for r in study if r["setting"] == setting]
+            precision, recall, _ = ranked_curve(records)
+            point = summarize(above(records, tuned["threshold"]))[dataset]["detection"]["iou_0.5"]
+            axis.plot(
+                recall,
+                precision,
+                color=colour,
+                linewidth=width,
+                label=f"{label}: F1 {point['f1']:.3f}",
+            )
+            axis.scatter(
+                [point["recall"]],
+                [point["precision"]],
+                s=45 * width / 1.8,
+                color=colour,
+                edgecolor=SURFACE,
+                linewidth=1.5,
+                zorder=3,
+            )
+        for name, run, md_dataset in MOONDREAM_F1[split]:
+            records = [
+                r
+                for r in read_records(artifacts / run / "predictions.jsonl")
+                if r["dataset"] == md_dataset
+            ]
+            point = summarize(records)[md_dataset]["detection"]["iou_0.5"]
+            axis.scatter(
+                [point["recall"]],
+                [point["precision"]],
+                s=130,
+                marker="D",
+                color=MOONDREAM_COLOURS[name],
+                edgecolor=SURFACE,
+                linewidth=2,
+                zorder=4,
+                label=f"{name} (one point): F1 {point['f1']:.3f}",
+            )
+        axis.set_xlabel("Recall", fontsize=9, color=MUTED)
+        axis.set_xlim(*across)
+        axis.set_ylim(low, 1.0)
+        axis.legend(frameon=False, fontsize=8.5, labelcolor=INK, loc="lower left")
+    axes[0].set_ylabel("Precision", fontsize=9, color=MUTED)
     figure.tight_layout()
     figure.savefig(out / "selection-precision-recall.png", dpi=170, facecolor=SURFACE)
     plt.close(figure)
@@ -1276,6 +1248,7 @@ def main():
     selection_area_figure(args.artifacts, args.out)
     selection_f1_figure(args.artifacts, args.out)
     speed_figure(args.artifacts, args.out)
+    asked_figure(args.artifacts, args.out)
     selection_pr_figure(args.artifacts, args.out, args.out / "images")
     architecture_images(args.artifacts, args.out)
     area_figure(args.artifacts, args.out)

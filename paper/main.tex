@@ -21,6 +21,7 @@
 \setlist{nosep,leftmargin=*}
 \setlength{\bibsep}{0pt plus 0.3pt}
 \graphicspath{{../artifacts/figures/}}
+\usepackage{stfloats}
 \renewcommand{\bibfont}{\scriptsize}
 \newcommand{\ok}{\textcolor{green!45!black}{+}}
 \newcommand{\no}{\textcolor{red!70!black}{$-$}}
@@ -52,6 +53,17 @@ streamed video.
 \end{abstract}
 
 \section{Introduction}
+\begin{figure*}[b]
+\centering
+\includegraphics[width=0.9\textwidth]{speed.jpg}
+\caption{F1 at IoU 0.5 against seconds per image on one L40S, on COCO (left) and VOC
+(right), with the categories present in each image prompted. The slot head on a frozen
+Moondream~2 reaches Moondream~3.1's F1 in 2.3 times less time on COCO and 1.5 times less
+on VOC. Also reading tiles adds 1.1 points on COCO at Moondream's time and costs 1.4 on
+VOC. The F1 axes differ between the panels.}
+\label{fig:speed}
+\end{figure*}
+
 Generalist VLMs localise objects through text: they emit Pix2Seq-style coordinate
 tokens~\citep{chen2022pix2seq}, as Kosmos-2~\citep{peng2023kosmos2},
 Florence-2~\citep{xiao2024florence2}, PaliGemma~\citep{beyer2024paligemma} and
@@ -191,8 +203,9 @@ confidences, so it has one operating point; the slot head receives no prompt.
 \centering\small\setlength{\tabcolsep}{4pt}
 \caption{COCO val2017 (500 images) and VOC 2007 test (1{,}000 images). Seconds per
 COCO image on one L40S with the categories present prompted (2.9 per image); last column:
-with all 80 categories asked, on 100 of the images. Slot heads use thresholds tuned on
-COCO.}
+with all 80 categories asked, on 100 of the images. Slots is the rank-128 head trained on
+COCO and teacher-labelled images, at thresholds tuned on COCO; the models and names are
+those of Fig.~\ref{fig:speed}.}
 \label{tab:main}
 \begin{tabular}{@{}lcccccrr@{}}
 \toprule
@@ -201,25 +214,12 @@ Model & COCO P & COCO R & COCO F1$_{.5}$ & COCO F1$_{.75}$ & VOC F1$_{.5}$ & s/i
 Moondream 2 \texttt{detect} (1.9B) & .501 & .706 & .586 & .450 & .851 & .220 & 1.52 \\
 Moondream 3.1 (9.3B MoE) & .682 & \textbf{.719} & .700 & .560 & .857 & .208 & 2.67 \\
 \midrule
-Slots r128, COCO + teacher, fast & \textbf{.811} & .626 & .707 & .566 & .858 & \textbf{.091} & \textbf{.082} \\
-Slots r128, COCO + teacher, tiled & .743 & .695 & \textbf{.718} & \textbf{.586} & .844 & .229 & -- \\
-Slots r64, COCO only, fast & .809 & .608 & .694 & .559 & \textbf{.862} & .087 & -- \\
+Slots, fast & \textbf{.811} & .626 & .707 & .566 & .858 & \textbf{.091} & \textbf{.082} \\
+Slots, tiled & .743 & .695 & \textbf{.718} & \textbf{.586} & .844 & .229 & -- \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\begin{figure*}[t]
-\centering
-\includegraphics[width=\textwidth]{speed.jpg}
-\caption{Left and middle: F1 at IoU 0.5 against seconds per image on one L40S, on COCO
-and VOC, with the categories present in each image prompted. The fast slot head reaches
-Moondream~3.1's F1 in 2.3 times less time on COCO and 1.5 times less on VOC; tiles add
-1.1 points on COCO at Moondream's time and cost 1.4 on VOC. The F1 axes differ between
-the two panels. Right: seconds per image against the number of categories asked, on 100
-COCO images and log axes. Moondream's time grows with the categories; the head's stays at
-0.08\,s, 33 times less than Moondream~3.1's with all 80.}
-\label{fig:speed}
-\end{figure*}
 
 \textbf{Similar quality.} The fast head is level with Moondream~3.1: F1 0.707 against
 0.700 on COCO and 0.858 against 0.857 on VOC (Table~\ref{tab:main}). It gets there
@@ -236,13 +236,23 @@ more our recall is 0.84 against Moondream~3.1's 0.87; for objects under one cell
 at 2.5 times the time. On VOC, whose objects are larger, tiles cost 1.4 points of F1
 through lower precision.
 
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\columnwidth]{asked.jpg}
+\caption{Seconds per image against the number of categories asked, on 100 COCO images
+and log axes. Moondream's time grows with the categories; the head's stays at 0.08\,s,
+33 times less than Moondream~3.1's with all 80.}
+\label{fig:asked}
+\end{figure}
+
 \textbf{Speed.} On one L40S the fast head takes 0.091\,s per COCO image and
 Moondream~3.1 takes 0.208\,s, 2.3 times as long, at the same F1; on VOC, where an image
 has fewer categories, the times are 0.063\,s and 0.095\,s (Fig.~\ref{fig:speed}). These
 are means over the test images with the categories present in each image prompted (2.9
 per COCO image), and they include the vision encoder, which dominates ours: the slot pass
 itself costs 0.016\,s. Moondream's time grows with the number of categories asked and
-the head's does not (Fig.~\ref{fig:speed}, right). With all 80 COCO categories asked on
+the head's does not (Fig.~\ref{fig:asked}). With all 80 COCO categories asked on
 100 of the images, the head takes 0.082\,s per image, Moondream~2 1.52\,s and
 Moondream~3.1 2.67\,s, 33 times as long. Asked for a category that is absent, Moondream
 often answers all the same: Moondream~3.1 returns a box for 71\% of the absent categories,
@@ -252,9 +262,9 @@ so its precision with all 80 asked is 0.05, where the head's is 0.79.
 asked for, the head can run on live video. On two MOT17~\citep{milan2016mot16} street
 sequences (02 and 09, 1080p at 30\,fps; every third frame, 375 frames; every annotated
 pedestrian, person on a vehicle or static person counts as truth) and asked only for
-people, the fast head is ahead of Moondream~3.1 at half its time
-(Table~\ref{tab:video}), and tiling finds the most people (Fig.~\ref{fig:mot} in the
-appendix). At 0.10\,s per detection, detecting every third frame keeps pace with
+people, the fast head is ahead of Moondream~3.1 (F1 0.447 against 0.429) at half its
+time (0.104\,s against 0.206\,s per frame), and tiling finds the most people (F1 0.496;
+Table~\ref{tab:video} and Fig.~\ref{fig:mot} in the appendix). At 0.10\,s per detection, detecting every third frame keeps pace with
 30\,fps video; our demo streams the annotated video back in two-second chunks while it
 is processed. MOT17-02's crowds of up to 46 small, overlapping people keep every
 model's recall low.
@@ -269,36 +279,17 @@ frames by IoU, smooths them and keeps a track for one frame after it is missed c
 losses to 12\% and 9\% with per-frame F1 unchanged (0.455 against 0.447), at no cost in
 time.
 
-\begin{table}[t]
-\centering\small\setlength{\tabcolsep}{3.5pt}
-\caption{MOT17-02 and -09, every third frame (375 frames, 1080p), people only. Seconds
-per frame on one L40S.}
-\label{tab:video}
-\begin{tabular}{@{}lcccr@{}}
-\toprule
-Model & P & R & F1$_{.5}$ & s/frame \\
-\midrule
-Moondream 2 \texttt{detect} & .638 & .308 & .415 & .260 \\
-Moondream 3.1 & .816 & .291 & .429 & .206 \\
-Slots r128, fast & .652 & .341 & .447 & .104 \\
-Slots r128, tiled & .559 & \textbf{.446} & \textbf{.496} & .418 \\
-Slots r64, COCO only, fast & \textbf{.851} & .241 & .376 & \textbf{.087} \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.86\textwidth]{selection-precision-recall.jpg}
-\caption{Precision against recall at IoU 0.5 of each approach under the final selection,
-on COCO (top) and VOC (bottom), from the full image only (left) and with $2\times2$ tiles
+\includegraphics[width=0.9\textwidth]{selection-precision-recall.jpg}
+\caption{Precision against recall at IoU 0.5 from the full image, on COCO (left) and VOC
 (right). Dots: each head at its threshold tuned on COCO. Diamonds: Moondream~2 and 3.1,
-which give no confidence and so one point each. On COCO the full-image curves pass inside
-Moondream~3.1's point and the tiled ones reach it; on VOC Moondream~3.1 sits just outside
-the full-image curves and on the tiled rank-128 curve. The two lowest curves run the
-rank-64 head on a backbone rounded to 4 bits per weight, as a phone or browser would hold
-it: trained on full precision (yellow), and trained on the rounded backbone (violet),
-which recovers 1.5 of the 4.5 points of COCO F1 the rounding costs and loses on VOC.}
+which give no confidence and so one point each. Adding 18k images labelled by Gemini~4
+Carbon to COCO's lifts the COCO curve (F1 0.694 to 0.705, 0.707 at rank 128) towards
+Moondream~3.1's point; on VOC the curves coincide and Moondream~3.1 sits on them. The
+violet curve runs the rank-64 head on a backbone rounded to 4 bits per weight, as a
+phone or browser would hold it.}
 \label{fig:pr}
 \end{figure*}
 
@@ -400,6 +391,26 @@ PyTorch's but not bit-identical.
 \no & Teacher's labels for COCO's, same 22k img. & .692$\rightarrow$.678 \\
 \no & + teacher boxes COCO lacks, same 22k img. & .692$\rightarrow$.678 \\
 \no & EMA self-training, ignore confident slots & .694$\rightarrow$.685 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Video}
+
+\begin{table}[h]
+\centering\small\setlength{\tabcolsep}{3.5pt}
+\caption{MOT17-02 and -09, every third frame (375 frames, 1080p), people only. Seconds
+per frame on one L40S.}
+\label{tab:video}
+\begin{tabular}{@{}lcccr@{}}
+\toprule
+Model & P & R & F1$_{.5}$ & s/frame \\
+\midrule
+Moondream 2 \texttt{detect} & .638 & .308 & .415 & .260 \\
+Moondream 3.1 & .816 & .291 & .429 & .206 \\
+Slots r128, fast & .652 & .341 & .447 & .104 \\
+Slots r128, tiled & .559 & \textbf{.446} & \textbf{.496} & .418 \\
+Slots r64, COCO only, fast & \textbf{.851} & .241 & .376 & \textbf{.087} \\
 \bottomrule
 \end{tabular}
 \end{table}
