@@ -21,10 +21,10 @@ permissions:
   contents: read
 env:
   EXPORT: ${{ inputs.export || 'slots-teacher-coco-rank64-w4' }}
-  SUITES: ${{ inputs.suites || 'kernels bench reference' }}
+  SUITES: ${{ inputs.suites || 'bench yolo' }}
   FRAMES: ${{ inputs.frames || '3' }}
   # Limits of the kernel timing: every choice is timed, however slow the GPU.
-  BUDGET: "60"
+  BUDGET: "20"
   SLOW: "30"
 jobs:
   suites:
@@ -45,13 +45,19 @@ jobs:
         run: |
           python3 -m venv .hf && .hf/bin/pip install -q huggingface_hub
           .hf/bin/hf download jfrick/crescent-moon --include "web/$EXPORT/*" --local-dir artifacts/hf
+      - name: Export the YOLO reference models
+        if: contains(env.SUITES, 'yolo')
+        run: |
+          .hf/bin/pip install -q ultralytics==8.3.40 onnx onnxscript onnxslim onnxruntime
+          (cd artifacts/hf/web/$EXPORT && for name in yolo11n yolo11x; do
+            ../../../../.hf/bin/yolo export model=$name.pt format=onnx imgsz=640; done)
       - name: Run the suites
         run: |
           mkdir -p artifacts/apple
           status=0
           for suite in $SUITES; do
             node web/tests/run.cjs "$suite" --gpu metal --browser ${{ matrix.browser }} \
-              --export "artifacts/hf/web/$EXPORT" --frames "$FRAMES" --budget "$BUDGET" --slow "$SLOW" --half 1 \
+              --export "artifacts/hf/web/$EXPORT" --frames "$FRAMES" --budget "$BUDGET" --slow "$SLOW" \
               --timeout 12 --out "artifacts/apple/$suite.json" || status=1
           done
           exit $status

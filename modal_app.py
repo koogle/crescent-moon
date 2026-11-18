@@ -89,6 +89,10 @@ yolo_image = (
     .apt_install("libgl1", "libglib2.0-0")
     .pip_install(
         "ultralytics==8.3.40",
+        "onnx==1.17.0",
+        "onnxscript",
+        "onnxslim",
+        "onnxruntime",
         *[p for p in PACKAGES if p.startswith(("scipy", "pillow", "pyarrow", "huggingface"))],
     )
     .env({"HF_HOME": "/runs/hf-cache"})
@@ -470,6 +474,28 @@ def photon(run_id: str, config: str = "configs/moondream3.1-photon.json"):
     launch(evaluate_photon, run_id, config, "summary.json", gpu="L40S")
 
 
+@app.function(image=yolo_image, timeout=LAUNCH_LIMIT_SECONDS, retries=0, volumes={"/runs": volume})
+def export_yolo(names, folder):
+    """ONNX files of Ultralytics models under `/runs/web/<folder>/`, for the browser
+    runtime's `yolo` suite."""
+    import shutil
+
+    from ultralytics import YOLO
+
+    out = Path("/runs/web") / folder
+    out.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        exported = YOLO(f"{name}.pt").export(format="onnx", imgsz=640, opset=17)
+        shutil.copy(exported, out / f"{name}.onnx")
+    volume.commit()
+    return sorted(p.name for p in out.iterdir())
+
+
+@app.local_entrypoint()
+def yolo_onnx(names: str = "yolo11n,yolo11x", folder: str = "yolo11"):
+    print(export_yolo.remote(names.split(","), folder))
+
+
 @app.local_entrypoint()
 def yolo(run_id: str, config: str = "configs/yolo11n.json"):
     """A closed-set reference detector on the tuning split, COCO and VOC."""
@@ -498,6 +524,7 @@ def browser(
         "bench": {"frames": frames} | chosen,
         "reference": {"timeout": 30} | chosen,
         "kernels": {},
+        "yolo": {"frames": frames},
     }
     config = {"export": export, "suites": [[name, options[name]] for name in suites.split(",")]}
     launch(run_browser, run_id, config, "report.json", gpu=gpu)
