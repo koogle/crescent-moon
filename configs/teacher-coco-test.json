@@ -24,5 +24,6 @@
         "type": "json_object"
       }
     }
-  }
+  },
+  "consensus_votes": []
 }

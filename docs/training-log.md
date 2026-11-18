@@ -789,6 +789,23 @@ YOLO's precision holds and its recall halves; on photos in bad weather it stays 
 fewer and larger objects than COCO's, so a model's two columns are not comparable; the
 rows within a column are. Rounding the backbone to 4 bits costs 5 points here, as on COCO.
 
+### The teacher on the test images
+
+`configs/teacher-coco-test.json` and `teacher-voc-test.json` have Gemini 4 Carbon label
+the 500 COCO and 1,000 VOC test images (7.49 USD, no failed replies), and
+`crescent_moon.teacher score` scores its boxes like a model's (VOC's "car" answered by
+"car" or "truck", as for the heads). Carbon gives no confidence, so it is one point:
+
+| Test set | Precision | Recall | F1 | F1, IoU 0.75 |
+|---|---|---|---|---|
+| COCO val, 500 images | 0.721 | 0.735 | 0.728 | 0.617 |
+| VOC 2007 test, 1,000 images | 0.760 | 0.961 | 0.849 | 0.749 |
+
+On COCO the teacher is 2 points above the rank-128 head and Moondream 3.1; on VOC it has
+the highest recall of any model and the lowest precision, and its F1 is below the
+rank-128 head's 0.858 and Moondream 3.1's 0.857. It labels objects VOC's annotators left
+out, which count against it here. The precision-recall figure shows it as a star.
+
 ### Generated images labelled by the teacher
 
 `crescent_moon.images` generates images through fal.ai (FLUX schnell) from prompts that

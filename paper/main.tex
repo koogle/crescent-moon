@@ -257,7 +257,7 @@ through lower precision.
 \includegraphics[width=0.9\textwidth]{selection-precision-recall.jpg}
 \caption{Precision against recall at IoU 0.5 from the full image, on COCO (left) and VOC
 (right). Dots: each head at its threshold tuned on COCO. Diamonds: Moondream~2 and 3.1,
-which give no confidence and so one point each. Adding 18k images labelled by Gemini~4
+which give no confidence and so one point each. Star: the teacher itself, Gemini~4 Carbon, asked to label the same test images (F1 0.728 on COCO, 0.849 on VOC). Adding 18k images labelled by Gemini~4
 Carbon to COCO's lifts the COCO curve (F1 0.694 to 0.705, 0.707 at rank 128) towards
 Moondream~3.1's point; on VOC the curves coincide and Moondream~3.1 sits on them. The
 violet curve runs the rank-64 head on a backbone rounded to 4 bits per weight, as a

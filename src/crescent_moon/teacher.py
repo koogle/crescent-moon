@@ -300,7 +300,7 @@ def score(config, out):
     usage = {}
     # Models that may ignore the requested coordinate order are scored both ways.
     both_orders = config.get("score_both_orders", [])
-    for path in sorted(out.glob("*.jsonl")):
+    for path in sorted(p for p in out.glob("*.jsonl") if p.name != "predictions.jsonl"):
         lines = [json.loads(line) for line in path.read_text().splitlines()]
         ok = [r for r in lines if "error" not in r]
         model = ok[0]["model"] if ok else path.stem

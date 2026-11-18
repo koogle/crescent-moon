@@ -30,5 +30,6 @@
       "car",
       "truck"
     ]
-  }
+  },
+  "consensus_votes": []
 }
