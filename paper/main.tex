@@ -340,7 +340,10 @@ from COCO's photos the order reverses. On COCO-O~\citep{mao2023cocoo}, 6{,}782
 human-labelled images of the same categories as sketches, cartoons, paintings, handmade
 objects, tattoos and photos in bad weather, the head scores 0.772 and stays within a point
 of Moondream~3.1 (0.781), while YOLO11x falls to 0.520 and YOLO11n to 0.410: their
-precision holds and their recall halves. The head keeps the robustness of the frozen
+precision holds and their recall halves. Generated images shift less: on 4{,}000 images
+we generated in 88 photographic and artistic media and labelled with the teacher, the head
+scores 0.786, Moondream~3.1 0.795 and YOLO11x 0.734, level with the 4-bit head of the next
+paragraph (0.732); these labels are the teacher's, which favours the heads. The head keeps the robustness of the frozen
 backbone it reads. The backbone also still captions, answers questions and points with
 the same weights; the head is a 50M-parameter addition to them.
 

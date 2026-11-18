@@ -809,6 +809,33 @@ evaluates against those labels. `configs/generated-images.json`: 1,000 photo-sty
 The truth here is the teacher's, and the slot heads were trained partly on its labels of
 other images, so this table favours them over YOLO in a way COCO-O's human labels do not.
 
+`configs/generated-wide.json` draws a wider net: 4,000 images from 88 media (40 kinds of
+photograph, from 35mm film to thermal images and daguerreotypes, and 48 kinds of art and
+craft, from oil paintings and ukiyo-e prints to pixel art, mosaics and LEGO models), 126
+places, lists of light, viewpoint and composition, 18 groups of categories that occur
+together, and five image sizes. The teacher found objects on 3,950 of them, 40,487 in all,
+for 25.04 USD (same HF dataset, folder `wide/`). Runs `generated-wide-*`, each model at
+its COCO threshold; the last two columns split the images by medium:
+
+| Model | Precision | Recall | F1 | F1, photographs (1,838) | F1, art (2,112) |
+|---|---|---|---|---|---|
+| Moondream 3.1 | 0.779 | 0.811 | 0.795 | 0.787 | 0.802 |
+| Slots, rank 128, fast | 0.840 | 0.739 | 0.786 | 0.790 | 0.784 |
+| YOLO11x | 0.894 | 0.622 | 0.734 | 0.744 | 0.725 |
+| Slots, rank 64, 4 bits, one crop | 0.859 | 0.637 | 0.732 | 0.732 | 0.731 |
+| YOLO11n | 0.812 | 0.453 | 0.582 | 0.595 | 0.571 |
+
+The order of the first set holds with smaller gaps between the large models: the fast head
+is a point behind Moondream 3.1 and 5 ahead of YOLO11x, and the 4-bit head is level with
+YOLO11x (ahead on 42 of the 88 media) and 15 ahead of YOLO11n. YOLO11x loses 2 points from
+photographs to art and the heads lose none, far from COCO-O's 20-point fall: a generated
+"painting of a dog" keeps the object's usual shape and framing more than a person's
+painting does. The media where the 4-bit head leads YOLO11x most are a child's crayon
+drawing (0.782 against 0.554), a carved stone relief (0.838 against 0.728) and an aerial
+photograph (0.734 against 0.639); YOLO11x leads most on a low-poly 3D render (0.834
+against 0.741) and a daguerreotype (0.763 against 0.693). The caveat on whose labels these
+are applies here too.
+
 ### The 4-bit head against YOLO in a browser
 
 `web/tests/yolo.test.js` runs YOLO's ONNX files (640 x 640 input, exported by
@@ -824,8 +851,8 @@ or non-maximum suppression. Seconds per frame, median of warm frames:
 
 YOLO11n is 24 times faster than the browser's slot detector on the L4 and 67 times on the
 Apple GPU, at a hundredth of the download. In accuracy the 4-bit head is 6 points behind
-YOLO11x on COCO val (0.654 against 0.715), 20 ahead on COCO-O and level on the generated
-photos (tables above). One macOS run lost its GPU device during the kernel timing and
+YOLO11x on COCO val (0.654 against 0.715), 20 ahead on COCO-O and level on both generated
+sets (tables above). One macOS run lost its GPU device during the kernel timing and
 reported times of a lost device (0.04 s per frame); `tune` now stops when the device is
 lost, and the rerun measured 2.2 s with all 36 reference checks passing.
 

@@ -49,6 +49,28 @@ COCO F1 0.715 in 0.018 s and YOLO11n 0.612 in 0.008 s, against the head's 0.707 
 0.091 s. Log: "Demo", "Video: MOT17", "Where the time goes", "Time against the number
 of categories asked", "A closed-set reference: YOLO11", "Custom decode kernels".
 
+## Away from COCO's photos
+
+F1 at IoU 0.5, each model at its threshold tuned on COCO. COCO-O is 6,782 human-labelled
+sketches, cartoons, paintings, handmade objects, tattoos and bad-weather photos of COCO's
+categories; the generated sets are FLUX schnell images labelled by Gemini 4 Carbon (1,000
+photo scenes, then 4,000 images in 88 photographic and artistic media).
+
+| Model | COCO val | COCO-O | Generated photos | Generated, 88 media |
+|---|---|---|---|---|
+| Moondream 3.1 | 0.700 | 0.781 | 0.868 | 0.795 |
+| Slots, rank 128, fast | 0.707 | 0.772 | 0.837 | 0.786 |
+| Slots, rank 64, 4 bits, one crop | 0.654 | 0.721 | 0.801 | 0.732 |
+| YOLO11x | 0.715 | 0.520 | 0.788 | 0.734 |
+| YOLO11n | 0.612 | 0.410 | 0.664 | 0.582 |
+
+YOLO matches the head on COCO and falls 20 points behind it on COCO-O; on generated images
+the gap is 5 points, and the 4-bit head is level with YOLO11x. The generated truth is the
+teacher's, whose labels the heads were partly trained on. In a browser on WebGPU the 4-bit
+head takes 0.75 s per frame on an L4 and 2.2 s on an Apple GPU, YOLO11n 0.031 s and
+0.033 s. Log: "Shifted images: COCO-O", "Generated images labelled by the teacher", "The
+4-bit head against YOLO in a browser".
+
 ## Video (MOT17, every third frame of two sequences)
 
 | Model | Precision | Recall | F1 |
