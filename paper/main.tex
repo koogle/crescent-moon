@@ -369,11 +369,7 @@ YOLO11n & .612 & .410 \\
 would hold, we round every backbone weight to 4 bits, a 1.1\,GB download in place of
 3.9\,GB. With one image crop, as the browser runs it, the rank-64 head then scores F1
 0.654 on COCO against 0.705 at full precision, and 0.721 on COCO-O, still 20 points above
-YOLO11x. The small configuration is also the faster one. On an L4, the GPU class
-of a cheap cloud instance, the full-precision head with all crops takes 0.226\,s per image
-and the 4-bit, one-crop head 0.128\,s. The time is saved by the single crop (0.124\,s
-at full precision, F1 0.680); our PyTorch pass stores the rounded weights as floats, so
-the rounding buys the smaller download, not speed.
+YOLO11x.
 
 \section{Limitations}
 The comparison is narrower than the models. The slot head knows COCO's 80 categories,
