@@ -47,9 +47,9 @@ with gr.Blocks(title="YOLO11 Camera") as page:
         detect,
         [camera, size, confidence],
         [output, status],
-        stream_every=0.1,
+        stream_every=0.2,
         time_limit=600,
-        concurrency_limit=4,
+        concurrency_limit=1,
     )
 
 if __name__ == "__main__":
