@@ -1054,6 +1054,10 @@ CURVE_SERIES = [
     ("Rank 64 on 4-bit weights", "slots-teacher-coco-rank64-w4", VIOLET, 1.8),
 ]
 MOONDREAM_COLOURS = {"Moondream 2": BLUE, "Moondream 3.1": YELLOW}
+# The teacher's own labels of the test images, scored like a model's
+# (`crescent_moon.teacher score`): folder per split and the model id its records carry.
+TEACHER = ("Gemini 4 Carbon, the teacher", "google/gemini-4-carbon")
+TEACHER_RUNS = {"coco": "teacher-coco-test", "voc": "teacher-voc-test"}
 
 
 def selection_pr_figure(artifacts, out, images):
@@ -1125,6 +1129,24 @@ def selection_pr_figure(artifacts, out, images):
                 zorder=4,
                 label=f"{name} (one point): F1 {point['f1']:.3f}",
             )
+        name, model = TEACHER
+        records = [
+            r
+            for r in read_records(artifacts / TEACHER_RUNS[split] / "predictions.jsonl")
+            if r["dataset"] == model
+        ]
+        point = summarize(records)[model]["detection"]["iou_0.5"]
+        axis.scatter(
+            [point["recall"]],
+            [point["precision"]],
+            s=230,
+            marker="*",
+            color=INK,
+            edgecolor=SURFACE,
+            linewidth=1.5,
+            zorder=4,
+            label=f"{name} (one point): F1 {point['f1']:.3f}",
+        )
         axis.set_xlabel("Recall", fontsize=9, color=MUTED)
         axis.set_xlim(*across)
         axis.set_ylim(low, 1.0)

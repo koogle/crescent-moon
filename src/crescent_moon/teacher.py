@@ -22,7 +22,9 @@ repeat a box of the same label (IoU 0.5); the record keeps every tile's reply.
 
 `score` turns each model's boxes, and their consensus, into the evaluation harness's
 records for the categories COCO annotates in each image, and writes
-`<out>/summary.json` with the harness's scores against COCO's labels. COCO's labels are
+`<out>/summary.json` with the harness's scores against COCO's labels and the records
+themselves to `<out>/predictions.jsonl` (the model id as "dataset"). `aliases` in the
+config maps a phrase to the labels that answer it (VOC's "car" covers "truck"). COCO's labels are
 incomplete, so a correct box on an unlabelled object counts as a false positive there.
 
 The key is read from the OPENROUNTER_TOKEN environment variable.
@@ -328,12 +330,14 @@ def score(config, out):
         sources[f"consensus-{votes}"] = lambda i, v=votes: consensus(
             {m: replies[i][m] for m in voters}, v
         )
+    aliases = config.get("aliases", {})
     records = []
     for name, objects_of in sources.items():
         for image_id in common:
             objects = objects_of(image_id)
             for query in samples[image_id]["queries"]:
-                predicted = [o["box"] for o in objects if o["label"] == query["phrase"]]
+                labels = aliases.get(query["phrase"], [query["phrase"]])
+                predicted = [o["box"] for o in objects if o["label"] in labels]
                 records.append(
                     query
                     | {
@@ -345,6 +349,9 @@ def score(config, out):
                     }
                 )
     summary = {"images": len(common), "usage": usage, "scores": summarize(records)}
+    with (out / "predictions.jsonl").open("w") as handle:
+        for record in records:
+            handle.write(json.dumps(record) + "\n")
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary
 
