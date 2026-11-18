@@ -1,38 +1,50 @@
-% Two-page summary of the Crescent Moon detection study.
+% Crescent Moon: one-pass object detection from a small vision-language model.
 % Build from paper/: latexmk -pdf main.tex
 % Figures are read from ../artifacts/figures/ (scripts/figures.py output).
 \documentclass[10pt,twocolumn]{article}
-\usepackage[letterpaper,margin=0.58in,columnsep=0.2in]{geometry}
+\usepackage[letterpaper,top=1in,bottom=1in,left=0.82in,right=0.82in,columnsep=0.3in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{mathptmx}
 \usepackage{microtype}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{amsmath}
-\usepackage{amssymb}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xcolor}
-\usepackage{enumitem}
 \usepackage{caption}
+\usepackage{titlesec}
 \usepackage{tikz}
-\usetikzlibrary{positioning,fit,calc,arrows.meta,decorations.pathreplacing}
-\captionsetup{font=small,labelfont=bf,skip=3pt}
-\setlist{nosep,leftmargin=*}
-\setlength{\bibsep}{0pt plus 0.3pt}
+\usetikzlibrary{positioning,calc,arrows.meta}
+\captionsetup{font=small,labelfont=bf,skip=6pt}
+\titleformat{\section}{\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.4ex plus 0.4ex}{0.7ex}
+\titlespacing*{\subsection}{0pt}{1.1ex plus 0.3ex}{0.4ex}
+\setlength{\bibsep}{2pt plus 0.3pt}
 \graphicspath{{../artifacts/figures/}}
-\usepackage{stfloats}
-\renewcommand{\bibfont}{\scriptsize}
+\renewcommand{\bibfont}{\footnotesize}
 \newcommand{\ok}{\textcolor{green!45!black}{+}}
 \newcommand{\no}{\textcolor{red!70!black}{$-$}}
 \newcommand{\eq}{$\circ$}
+\newcommand{\pend}{$\ast$}
 
-\title{\vspace{-2.2em}\Large\bfseries Crescent Moon: One Pass Object Detection from a Small Vision-Language Model}
+\title{\LARGE\bfseries Crescent Moon: One Pass Object Detection\\ from a Small Vision-Language Model}
 \author{Jakob Frick\\ \normalsize\texttt{jakob.maria.frick@gmail.com}}
-\date{\vspace{-2.4em}}
+\date{}
 
 \begin{document}
+\twocolumn[{%
 \maketitle
+\vspace{-1.2em}
+\begin{center}
+\includegraphics[width=0.86\textwidth]{speed.jpg}
+\captionof{figure}{Accuracy against time per image on COCO (left) and Pascal VOC (right),
+on one L40S. Slots match Moondream~3.1 in less than half its time.}
+\label{fig:speed}
+\end{center}
+\vspace{0.6em}
+}]
 
 \begin{abstract}
 Small vision-language models (VLMs) have learned through their pretraining a deep
@@ -61,15 +73,57 @@ different approaches that were implemented.
 \end{abstract}
 
 \section{Introduction}
-\begin{figure*}[b]
+\begin{figure*}[t]
 \centering
-\includegraphics[width=0.9\textwidth]{speed.jpg}
-\caption{F1 at IoU 0.5 against seconds per image on one L40S, on COCO (left) and VOC
-(right), with the categories present in each image prompted. The slot head on a frozen
-Moondream~2 reaches Moondream~3.1's F1 in 2.3 times less time on COCO and 1.5 times less
-on VOC. Also reading tiles adds 1.1 points on COCO at Moondream's time and costs 1.4 on
-VOC. The F1 axes differ between the panels.}
-\label{fig:speed}
+\definecolor{slotA}{HTML}{2A78D6}\definecolor{slotB}{HTML}{EB6834}
+\definecolor{slotC}{HTML}{1BAF7A}\definecolor{slotD}{HTML}{6250D6}
+\definecolor{frozenfill}{HTML}{EEF3FA}\definecolor{trained}{HTML}{E8833A}
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\footnotesize, x=1cm, y=1cm,
+  tok/.style={minimum size=0.26cm, inner sep=0, draw=black!40, fill=black!10},
+  empty/.style={minimum size=0.26cm, inner sep=0, draw=black!45, dashed, fill=white},
+  full/.style={minimum size=0.26cm, inner sep=0, draw=#1!75!black, fill=#1!85},
+  none/.style={minimum size=0.26cm, inner sep=0, draw=black!25, fill=black!4},
+  lab/.style={font=\scriptsize, text=black!65, align=center},
+  head/.style={font=\footnotesize\bfseries, align=center},
+  arr/.style={-{Latex[length=1.8mm]}, black!60, thick},
+]
+% input image
+\node[inner sep=0] (in) at (0,0) {\includegraphics[height=2.7cm]{architecture-input.jpg}};
+\node[head] at (0,1.85) {Image};
+% input sequence: image tokens, then empty slots
+\node[head] at (3.75,1.85) {Input};
+\foreach \i in {0,...,5} \node[tok] at (2.6+\i*0.3,1.05) {};
+\node[lab, anchor=west] at (4.3,1.05) {image tokens};
+\foreach \r in {0,...,3} \foreach \i in {0,...,5} \node[empty] at (2.6+\i*0.3,0.45-\r*0.4) {};
+\node[lab] at (3.35,-1.25) {48 empty slots};
+\draw[arr] (1.95,0) -- (2.3,0);
+% the model
+\draw[draw=blue!35!black!45, fill=frozenfill, rounded corners=3pt] (6.0,-1.35) rectangle (8.9,1.35);
+\node[align=center] at (7.45,0.5) {Moondream 2\\[1pt]\scriptsize frozen};
+\draw[draw=trained, fill=trained!22, rounded corners=1.5pt] (6.2,-1.1) rectangle (8.7,-0.45);
+\node[font=\scriptsize, text=trained!65!black, align=center] at (7.45,-0.775) {adapters at the slots\\trained};
+\node[head] at (7.45,1.85) {One forward pass};
+\draw[arr] (4.5,0) -- (6.0,0);
+\draw[arr] (8.9,0) -- (9.35,0);
+% output: the same slots, filled
+\node[head] at (10.9,1.85) {Output};
+\foreach \c/\t/\r in {slotA/person/0,slotB/horse/1,slotC/person/2}
+  { \foreach \i in {0,...,5} \node[full=\c] at (9.65+\i*0.3,0.85-\r*0.4) {};
+    \node[anchor=west, font=\scriptsize] at (11.5,0.85-\r*0.4) {\t}; }
+\foreach \i in {0,...,5} \node[none] at (9.65+\i*0.3,-0.35) {};
+\node[anchor=west, font=\scriptsize, text=black!55] at (11.5,-0.35) {nothing};
+\node[font=\scriptsize] at (10.4,-0.75) {$\vdots$};
+\node[lab] at (10.4,-1.3) {x \,y \,size \,+\, label};
+% detections
+\node[inner sep=0] (out) at (14.6,0) {\includegraphics[height=2.7cm]{architecture-output.jpg}};
+\node[head] at (14.6,1.85) {Detections};
+\draw[arr] (12.5,0) -- (out.west);
+\end{tikzpicture}}
+\caption{We append empty slots to the image tokens of a frozen Moondream~2. One forward
+pass fills every slot with a box and a label, or leaves it as ``nothing''.}
+\label{fig:architecture}
 \end{figure*}
 
 Object detection has been one of the traditional applications of Machine Learning for
@@ -80,7 +134,7 @@ decoding is sequential and conditioned by prompts. Moondream~2's
 phrase. Latency grows with categories and objects in the image. This makes VLMs unfit for
 fast object detection especially when there is no prompt given.
 
-Set prediction (DETR;~\citealp{carion2020detr}) uses a fixed number of queries who each
+Set prediction (DETR~\citep{carion2020detr}) uses a fixed number of queries who each
 return a box or ``no object'' in one pass to perform object detection. It is the basis of
 today's most accurate detectors, DETR and its descendants such as
 DINO~\citep{zhang2023dino} and of real-time variants such as
@@ -99,294 +153,217 @@ depend on the number of categories, which makes detection on streamed video prac
 and it knows only COCO's 80 categories (Section~4). The aim is reliable rather than
 exhaustive detection.
 
-\begin{figure*}[t]
-\centering
-\definecolor{slotA}{HTML}{2A78D6}\definecolor{slotB}{HTML}{EB6834}
-\definecolor{slotC}{HTML}{1BAF7A}\definecolor{slotD}{HTML}{6250D6}
-\definecolor{frozenfill}{HTML}{E8F0FB}\definecolor{encoderfill}{HTML}{E6F4EA}
-\definecolor{trained}{HTML}{E8833A}
-\begin{tikzpicture}[
-  font=\footnotesize, x=1cm, y=1cm,
-  tok/.style={minimum size=0.3cm, inner sep=0, draw=black!45, fill=black!8},
-  slot/.style={minimum size=0.3cm, inner sep=0, draw=#1!80!black, fill=#1},
-  lab/.style={font=\scriptsize, text=black!65, align=center},
-  arr/.style={-{Latex[length=1.6mm]}, black!55, thick},
-]
-% input image
-\node[inner sep=0] (in) at (0,0) {\includegraphics[height=2.9cm]{architecture-input.jpg}};
-\node[lab, below=2pt of in] {image};
-% vision encoder: a wide trapezoid, as large blocks are large components
-\draw[draw=green!45!black!60, fill=encoderfill, rounded corners=2pt]
-  (3.05,-1.2) -- (4.75,-0.65) -- (4.75,0.65) -- (3.05,1.2) -- cycle;
-\node[align=center] at (3.9,0) {vision\\encoder};
-\node[lab] at (3.9,-1.55) {frozen};
-\draw[arr] (in.east) -- (3.05,0);
-% image tokens and the added slots
-\foreach \i in {0,...,3} \node[tok] at (5.3,0.95-\i*0.36) {};
-\node at (5.3,-0.55) {$\vdots$};
-\node[tok] at (5.3,-1.0) {};
-\foreach \c/\i in {slotA/0,slotB/1,slotC/2,slotD/3} \node[slot=\c] at (5.75,0.95-\i*0.36) {};
-\node[tok, fill=white] at (5.75,-0.49) {};
-\node[tok, fill=white] at (5.75,-0.85) {};
-\node[font=\tiny] at (5.75,-1.13) {$\vdots$};
-\node[lab] at (5.3,1.55) {image\\tokens};
-\node[lab, text=trained] at (5.85,-1.65) {48 slots\\(trained queries)};
-\draw[arr] (4.75,0) -- (5.12,0);
-% language-model decoder, with the adapters as a thin strip
-\draw[draw=blue!40!black!50, fill=frozenfill, rounded corners=3pt] (6.2,-1.2) rectangle (9.5,1.2);
-\node[align=center] at (7.85,0.35) {language-model decoder\\24 layers};
-\draw[draw=trained, fill=trained!25, rounded corners=1.5pt] (6.4,-0.95) rectangle (9.3,-0.45);
-\node[font=\scriptsize, text=trained!70!black] at (7.85,-0.7) {LoRA at slot positions};
-\node[lab] at (7.85,-1.55) {frozen, \textcolor{trained}{adapters trained}};
-\draw[arr] (5.98,0) -- (6.2,0);
-% one output per slot, read by Moondream's own heads
-\foreach \c/\t/\i in {slotA/person/0,slotB/horse/1,slotC/person/2,slotD/person/3}
-  { \node[slot=\c] at (10.05,0.95-\i*0.36) {};
-    \node[anchor=west, font=\scriptsize] at (10.25,0.95-\i*0.36) {\t}; }
-\node[tok, fill=white] at (10.05,-0.49) {};
-\node[anchor=west, font=\scriptsize, text=black!55] at (10.25,-0.49) {$\varnothing$ no object};
-\node[tok, fill=white] at (10.05,-0.85) {};
-\node[anchor=west, font=\scriptsize, text=black!55] at (10.25,-0.85) {$\varnothing$ no object};
-\node[lab] at (10.75,1.55) {all 48 slots\\in one pass};
-\node[lab] at (10.75,-1.65) {box, label, score\\via Moondream's heads};
-\draw[arr] (9.5,0) -- (9.87,0);
-% output image with each slot's box in its colour
-\node[inner sep=0] (out) at (14.6,0) {\includegraphics[height=2.9cm]{architecture-output.jpg}};
-\node[lab, below=2pt of out] {detections};
-\draw[arr] (11.75,0) -- (out.west);
-% training: matching to labelled boxes, as in DETR
-\node[lab, text=trained!80!black, anchor=north] (match) at (14.6,-2.05)
-  {training: each labelled box is matched to one slot;\\the other slots learn $\varnothing$};
-\end{tikzpicture}
-\caption{The slot head on a frozen Moondream~2. Only the orange parts are trained: the
-slot queries (with a mask and role embedding per position), low-rank adapters that act
-only at slot positions, and an objectness layer, about 50M parameters at rank 64. The
-image tokens and every frozen weight are as in the base model. Each slot is six blank
-positions (x, y, size, three label tokens) that the decoder fills in a single forward
-pass; Moondream's own region and vocabulary heads read them as a box and a label, or
-the slot says there is no object ($\varnothing$). Colours follow slots from input to
-output, on a Pascal VOC test image with the rank-128 head's detections.}
-\label{fig:architecture}
-\end{figure*}
 
+
+
+
+\section{Method}
+
+\subsection{Slots}
+Moondream~2 turns an image into 730 image tokens, which its language model then reads to
+produce text. We append 48 \emph{slots} after these tokens (Fig.~\ref{fig:architecture}).
+A slot is a group of six positions that starts empty and can hold one object: three
+positions for the box (its centre x, centre y, and size) and three for the label, which
+is long enough for every COCO category name.
+
+One forward pass of the model fills all slots at once. We do not add new output layers
+to read them. Moondream~2 already has a head that turns a position into a coordinate or
+a size, and a head that turns a position into a word, and we use both as they are. The
+only new output is an \emph{objectness layer}: a single linear layer that looks at each
+slot and outputs one number, the probability that the slot holds a real object. Slots
+with a low probability are treated as ``nothing''.
+
+This is the first step of how a masked diffusion model
+writes~\citep{chang2022maskgit,austin2021d3pm,sahoo2024mdlm,nie2025llada}: every position
+starts as a blank and all of them are predicted together. Such a model would then keep
+its most confident predictions and predict the rest again, for several steps. We stop
+after the first.
+
+\subsection{Training}
+The weights of Moondream~2 stay frozen. We train three things: the starting embeddings
+of the slots, the objectness layer, and low-rank adapters (LoRA~\citep{hu2022lora})
+that are only active at the slot positions. Because the adapters do not touch the image
+tokens, the model still captions and answers questions exactly as before. At rank 64 this
+is about 50M trained parameters, and about 100M at rank 128.
+
+The model has to learn which slot should describe which object, and no slot is assigned
+in advance. We follow DETR~\citep{carion2020detr}: for every training image, the
+Hungarian algorithm~\citep{kuhn1955hungarian} pairs each labelled object with the slot
+whose prediction is closest to it. A paired slot is trained to produce that object's box
+and label, with a cross-entropy loss on the coordinates and the label and an L1 and
+GIoU loss~\citep{rezatofighi2019giou} on the box. All other slots are trained to say
+``nothing''. A run takes two to four hours on one H100 (batch size 16, 20{,}000 steps).
+
+\subsection{From slots to detections}
+Each slot gets a score: its objectness times the confidence of its label and its box. We
+keep the slots above a threshold. When two kept boxes with the same label overlap by an
+IoU of 0.5 or more, we merge them into one~\citep{solovyev2021wbf}.
+
+Small objects are hard to find, because the vision encoder shrinks the image to a grid
+of $27\times27$ cells. As an option, the model can also read a $2\times2$ grid of
+overlapping crops of the image (\emph{tiles}) in the same batch and add the small boxes
+it finds there~\citep{akyon2022sahi}. This finds more small objects and takes 2.5 times
+as long. We choose the threshold and these settings on 500 COCO validation images that
+are not part of the test set.
+
+\subsection{Training data}
+We train on 46k images from COCO train2017~\citep{lin2014coco}, with its 80 categories.
+To see more kinds of images, we add images from Open
+Images~\citep{kuznetsova2020openimages} and Objects365~\citep{shao2019objects365} that a
+larger VLM labelled for us, a form of distillation~\citep{hinton2015distilling}. To pick
+this \emph{teacher}, we compared twelve VLMs through OpenRouter~\citep{openrouter} on 200
+COCO images. Gemini~4 Carbon~\citep{gemini2023} agreed best with COCO's labels (F1 0.756)
+at \$0.005 per image. It labelled 21k images for \$120, and 17.7k of them passed our
+label filter.
+
+\section{Experiments}
 \begin{table*}[t]
-\centering\small\setlength{\tabcolsep}{6pt}
-\caption{F1 at IoU 0.5 on four test sets, and seconds per COCO image on one L40S.
-\emph{COCO}: 500 val2017 images. \emph{VOC}: 1{,}000 Pascal VOC 2007 test images, which
-no model was tuned on. \emph{COCO-O}: 6{,}782 human-labelled sketches, cartoons, paintings
-and other shifted images of COCO's categories. \emph{Generated}: 3{,}950 images we
-generated in 88 photographic and artistic media and labelled with the teacher. Every
-model is prompted with the categories present in each image; thresholds are tuned on
-COCO. With tiles, the head also reads a $2\times2$ grid of overlapping crops of the image
-in the same batch. Precision, recall and F1 at IoU 0.75 on COCO are in
-Appendix~\ref{app:coco}. Cells marked $\ast$ are being measured.}
+\centering\small\setlength{\tabcolsep}{7pt}
+\caption{F1 at IoU 0.5 on the four test sets, and seconds per COCO image on one L40S.
+Cells marked \pend{} are still being measured.}
 \label{tab:main}
 \begin{tabular}{@{}lccccr@{}}
 \toprule
 Model & COCO & VOC & COCO-O & Generated & s/img \\
 \midrule
-Moondream 2 \texttt{detect} & .586 & .851 & .773 & $\ast$ & .220 \\
+Moondream 2 \texttt{detect} & .586 & .851 & .773 & \pend & .220 \\
 Moondream 3.1 & .700 & .857 & \textbf{.781} & \textbf{.795} & .208 \\
+YOLO11n & .612 & .770 & .410 & .582 & \textbf{.008} \\
+YOLO11x & .715 & .838 & .520 & .734 & .018 \\
 \midrule
-Slots, rank 64 & .705 & .840 & $\ast$ & $\ast$ & \textbf{.091} \\
-Slots, rank 64, with tiles & .714 & .841 & $\ast$ & $\ast$ & .226 \\
-Slots, rank 128 & .707 & \textbf{.858} & .772 & .786 & \textbf{.091} \\
-Slots, rank 128, with tiles & \textbf{.718} & .844 & $\ast$ & $\ast$ & .229 \\
+Slots, rank 64 & .705 & .840 & .765 & .779 & .091 \\
+Slots, rank 64, with tiles & .714 & .841 & \pend & \pend & .226 \\
+Slots, rank 128 & .707 & \textbf{.858} & .772 & .786 & .091 \\
+Slots, rank 128, with tiles & \textbf{.718} & .844 & \pend & \pend & .229 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\section{Method}
-\textbf{Slots} (Fig.~\ref{fig:architecture}). After Moondream~2's 730-position image
-prefix we append 48 slots of six positions. Each position starts as a blank: a learned
-mask embedding plus its slot's query and its role (x, y, size, or label token). Positions
-see the image and each other, and one forward pass fills them all: positions 0--2 are
-read through the region head's 1{,}024-bin coordinate and size decoders (box centre,
-width and height), positions 3--5 through the vocabulary head (a three-token label), and
-position~0 also gives an objectness logit. This is the first step of masked-diffusion
-decoding~\citep{chang2022maskgit,austin2021d3pm,sahoo2024mdlm,nie2025llada}: every
-position starts masked and is predicted at once. Further steps would reveal the most
-confident positions and predict the rest again; we run none.
 
-\textbf{Training.} The backbone stays frozen. LoRA adapters~\citep{hu2022lora} of rank
-16--128 act only at slot positions, so the image prefix and the model's existing skills
-are untouched. Each image's truth set is matched to slots by the Hungarian
-algorithm~\citep{kuhn1955hungarian,carion2020detr} on box distance, overlap, objectness
-and label likelihood. Matched slots receive cross-entropy on the four bins, L1 and
-GIoU~\citep{rezatofighi2019giou} on the expected-bin box, and label cross-entropy;
-unmatched slots are pushed to ``nothing'' with weight 0.1. The reported heads also train
-a second, denoising pass per step that reveals a random share of each matched slot's
-true positions; training without it gives the same results in three quarters of the time
-(Table~\ref{tab:ablate}). Runs use one H100, batch~16, 20{,}000 steps (2--4\,h).
+\subsection{Setup}
+We compare the slot model with Moondream~2, the model it is built on, with
+Moondream~3.1~\citep{moondream31}, a newer and five times larger model from the same
+family, and with YOLO11~\citep{yolo11}, a dedicated detector trained on COCO, in its
+smallest (n, 2.6M parameters) and largest (x, 57M) size.
 
-\textbf{Selection.} A slot's score is objectness $\times$ label confidence $\times$
-(box confidence)$^{1/4}$. Same-label boxes overlapping by IoU 0.5 are fused into their
-score-weighted mean~\citep{solovyev2021wbf}. Optionally the head also reads a $2\times2$
-grid of tiles overlapping by a quarter, in one batch with the full image, and keeps tile
-boxes smaller than four grid cells that no tile edge cuts~\citep{akyon2022sahi}. Every
-choice and threshold is tuned on 500 further COCO val images disjoint from the test set.
+We use four test sets. \emph{COCO} is 500 images from val2017. \emph{VOC} is 1{,}000
+images from the Pascal VOC 2007 test set, which none of our choices were tuned on.
+\emph{COCO-O}~\citep{mao2023cocoo} is 6{,}782 human-labelled images of COCO's categories
+that do not look like COCO's photos: sketches, cartoons, paintings, handmade objects,
+tattoos and photos in bad weather. \emph{Generated} is a set we made ourselves: 3{,}950
+images generated with a text-to-image model in 88 photographic and artistic styles, and
+labelled by the teacher. No model saw these images in training, but their labels come
+from the same teacher that labelled part of our training data.
 
-\textbf{Data.} 46k COCO train2017 images~\citep{lin2014coco} (the 80 categories), plus
-images from Open Images~\citep{kuznetsova2020openimages} and
-Objects365~\citep{shao2019objects365} labelled by a VLM teacher~\citep{hinton2015distilling}.
-A pilot scored twelve VLMs, called through OpenRouter~\citep{openrouter}, against COCO's
-labels on 200 val images. Gemini~4 Carbon~\citep{gemini2023} labelled best (F1 0.756,
-as complete as Moondream~3.1 and more precise) at \$0.005 per image, so it labelled 21k
-images for \$120, of which 17.7k passed the label filter.
+We report F1 at an IoU of 0.5, where each predicted box can match one labelled box.
+Moondream has to be asked for one category at a time, so we ask it for every category
+that is present in the image. The slot model and YOLO are not prompted. All times are
+measured on one L40S GPU.
 
-\section{Results}
-We evaluate on a seeded sample of 500 COCO val2017 images (1{,}446 phrases: every
-category present is prompted) and of 1{,}000 Pascal VOC 2007 test images (1{,}548
-phrases, the 20 categories under their COCO names), with micro precision, recall and F1
-under one-to-one matching. Moondream is prompted once per present category and gives no
-confidences, so it has one operating point; the slot head receives no prompt.
+\subsection{Accuracy}
+The slot model is as accurate as Moondream~3.1 (Table~\ref{tab:main}). At rank 128 it
+scores 0.707 on COCO against 0.700, and 0.858 on VOC against 0.857. Differences of this
+size are within noise: a paired bootstrap puts the noise at about 1.5 points, so we call
+this a tie. Compared with Moondream~2, the model it is built on, it gains 12 points on
+COCO.
 
+The two models reach this score in different ways. The slot model is more careful: on
+COCO its precision is 0.811 against 0.682, and its recall is 0.626 against 0.719. Most of
+what it misses is small. For objects smaller than one cell of the feature grid its
+recall is 0.20, where Moondream~3.1 reaches 0.36. Reading tiles closes this gap (0.37)
+and raises COCO F1 to 0.718, at 2.5 times the time. On VOC, where objects are larger,
+tiles do not help.
 
-
-
-\textbf{Similar quality.} The fast head is level with Moondream~3.1: F1 0.707 against
-0.700 on COCO and 0.858 against 0.857 on VOC (Table~\ref{tab:main}). It gets there
-differently, with higher precision (0.811 against 0.682 on COCO) and lower recall (0.626
-against 0.719). Over its own backbone's \texttt{detect} it gains 12 points of COCO F1 and
-0.7 on VOC. Paired bootstrap intervals put differences of about 1.5 points within noise,
-so we read the comparison with Moondream~3.1 as a tie. Moondream~3.1's COCO numbers here
-do not reproduce its published ones, whose protocol is not specified.
-
-\textbf{Small objects.} The head misses small objects that Moondream finds in the same
-features. All models read the same $27\times27$ feature grid. On objects of four cells or
-more our recall is 0.84 against Moondream~3.1's 0.87; for objects under one cell it is
-0.20 against 0.36. Also reading a $2\times2$ grid of tiles raises that to 0.37 and COCO F1 to 0.718,
-at 2.5 times the time. On VOC, whose objects are larger, tiles cost 1.4 points of F1
-through lower precision.
-
+Rank 64 and rank 128 score the same on COCO, and rank 128 is 1.8 points better on VOC.
+Both take the same time, so we use rank 128 in the rest of this section.
+Table~\ref{tab:coco} in the appendix gives precision and recall for every model.
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.9\textwidth]{selection-precision-recall.jpg}
-\caption{Precision against recall at IoU 0.5 from the full image, on COCO (left) and VOC
-(right). Dots: each head at its threshold tuned on COCO. Diamonds: Moondream~2 and 3.1,
-which give no confidence and so one point each. Star: the teacher itself, Gemini~4 Carbon, asked to label the same test images (F1 0.728 on COCO, 0.849 on VOC). Adding 18k images labelled by Gemini~4
-Carbon to COCO's lifts the COCO curve (F1 0.694 to 0.705, 0.707 at rank 128) towards
-Moondream~3.1's point; on VOC the curves coincide and Moondream~3.1 sits on them. The
-violet curve runs the rank-64 head on a backbone rounded to 4 bits per weight, as a
-phone or browser would hold it.}
+\includegraphics[width=0.86\textwidth]{selection-precision-recall.jpg}
+\caption{Precision against recall on COCO (left) and VOC (right). The slot model gives a
+confidence per box, so it has a curve; the dot is the threshold we use. Moondream and the
+teacher give no confidence and are single points.}
 \label{fig:pr}
 \end{figure*}
 
+\subsection{Speed}
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.92\columnwidth]{asked.jpg}
-\caption{Seconds per image against the number of categories asked, on 100 COCO images
-and log axes. Moondream's time grows with the categories; the head's stays at 0.08\,s,
-33 times less than Moondream~3.1's with all 80.}
+\includegraphics[width=0.9\columnwidth]{asked.jpg}
+\caption{Time per image against the number of categories asked.}
 \label{fig:asked}
 \end{figure}
+The slot model takes 0.091\,s per COCO image and Moondream~3.1 takes 0.208\,s
+(Fig.~\ref{fig:speed}). Filling the slots is a small part of that: 0.016\,s. The rest is
+the vision encoder and the image tokens, which Moondream needs as well.
 
-\textbf{Speed.} The slot pass costs 0.016\,s: all 48 slots, 288 positions, in one pass of
-the decoder. The rest of an image's time is the vision encoder and the image prefix,
-which Moondream pays too. On one L40S the fast head takes 0.091\,s per COCO image and
-Moondream~3.1 takes 0.208\,s, 2.3 times as long, at the same F1; on VOC, where an image
-has fewer categories, the times are 0.063\,s and 0.095\,s (Fig.~\ref{fig:speed}). These
-are means over the test images with the categories present in each image prompted (2.9
-per COCO image). As expected of one prompt per category, Moondream's time grows with the
-number asked, and the head's stays where it is (Fig.~\ref{fig:asked}): with all 80 COCO
-categories asked on 100 of the images, the head takes 0.082\,s per image, Moondream~2
-1.52\,s and Moondream~3.1 2.67\,s. Asked for a category that is absent, Moondream often
-answers all the same: Moondream~3.1 returns a box for 71\% of the absent categories, so
-its precision with all 80 asked is 0.05, where the head's is 0.79.
+The gap grows with the number of categories. Moondream runs once per category, and the
+slot model runs once per image. When we ask for all 80 COCO categories, the slot model
+still takes 0.08\,s, Moondream~2 takes 1.52\,s and Moondream~3.1 takes 2.67\,s
+(Fig.~\ref{fig:asked}). Asking for everything also hurts Moondream's accuracy: it returns
+a box for 71\% of the categories that are not in the image.
 
+YOLO is much faster than any of these models, at 0.008 to 0.018\,s per image.
 
-\textbf{Streamed video.} Because a frame costs one pass however many categories are
-asked for, the head can run on live video. On two MOT17~\citep{milan2016mot16} street
-sequences (02 and 09, 1080p at 30\,fps; every third frame, 375 frames; every annotated
-pedestrian, person on a vehicle or static person counts as truth) and asked only for
-people, the fast head is ahead of Moondream~3.1 (F1 0.447 against 0.429) at half its
-time (0.104\,s against 0.206\,s per frame), and tiling finds the most people (F1 0.496;
-Table~\ref{tab:video} and Fig.~\ref{fig:mot} in the appendix). At 0.10\,s per detection, detecting every third frame keeps pace with
-30\,fps video; our demo streams the annotated video back in two-second chunks while it
-is processed. MOT17-02's crowds of up to 46 small, overlapping people keep every
-model's recall low.
+\subsection{Robustness}
+On COCO, the largest YOLO matches the slot model in a fifth of the time (0.715 against
+0.707). If the images look like COCO and only COCO's categories are needed, a dedicated
+detector is the better choice.
 
-Detecting frames independently flickers: of the people found in one sampled frame and
-still present in the next, 18\% (MOT17-02) and 10\% (09) are not found again by the fast
-head, and 15\% and 9\% by Moondream~3.1. For the slot head, 42\% of these losses are a
-loose box on the person, 35\% a good box that the selection drops (mostly fused with a
-neighbour in a crowd), and 19\% no candidate at all; a lower threshold for boxes that
-continue the last frame's changes nothing. A light tracker that links boxes across
-frames by IoU, smooths them and keeps a track for one frame after it is missed cuts the
-losses to 12\% and 9\% with per-frame F1 unchanged (0.455 against 0.447), at no cost in
-time.
+This changes when the images look different. On COCO-O the slot model scores 0.772 and
+stays within a point of Moondream~3.1 (0.781), while YOLO11x falls to 0.520 and YOLO11n
+to 0.410. YOLO still places its boxes well, but it finds only half as many objects. On
+our generated images the gap is smaller: the slot model scores 0.786 and YOLO11x 0.734.
+We read this as the slot model keeping the general image understanding of the VLM it is
+built on, which a detector trained only on COCO does not have.
 
+Figure~\ref{fig:pr} shows where this comes from in training. Adding the teacher-labelled
+images moves the slot model's curve on COCO towards Moondream~3.1, and the teacher itself
+(F1 0.728 on COCO) is still ahead of every model we tested.
 
+\subsection{Video}
+Because one pass covers every category, the slot model can run on video as it arrives.
+At 0.10\,s per image, detecting every third frame keeps up with 30 frames per second.
 
-\textbf{One step is enough.} The head is a masked-diffusion decoder run for a single
-step, and nothing we tried made further steps pay. Decoding in two or three steps,
-revealing the most confident positions between them, left COCO F1 unchanged. Training
-without the second, denoising pass gave the same F1 (0.705) in three quarters of the
-time. We conjecture that six positions per object, each read through a head the model
-already has, leave little for refinement to correct; we have not tested this, and
-labels longer than three tokens may behave differently.
+We tested this on two street scenes from MOT17~\citep{milan2016mot16}, looking for
+people in every third frame. The slot model scores F1 0.447 at 0.104\,s per frame, and
+Moondream~3.1 scores 0.429 at 0.206\,s (Table~\ref{tab:video} in the appendix). With
+tiles it finds the most people (F1 0.496).
 
-\textbf{What else mattered.} Three findings account for the path from F1 0.429 to 0.718
-on COCO; Table~\ref{tab:ablate} in the appendix lists every change, one at a time.
-\emph{(i)~The model's own coordinate bins.} Reading boxes through Moondream's
-1{,}024-bin region head instead of regressing four numbers was the largest single gain
-(0.429 to 0.563). \emph{(ii)~Data.} Four times the images with three times the steps
-(0.563 to 0.622), small objects kept in the labels (0.636) and 18k teacher-labelled
-images added to COCO (0.657 to 0.673) each helped (Fig.~\ref{fig:pr}), whereas training
-on the teacher's labels without COCO lost 1.3 points. \emph{(iii)~Selection.} A combined
-score with fusion of duplicates added 2.7 points without retraining, and tiles another
-1.1. Beyond rank 64, added capacity or conditioning moved COCO F1 by at most 0.6 points:
-rank 128, category prompts, a size-weighted loss.
+Detecting each frame on its own makes boxes flicker: 10 to 18\% of the people found in
+one frame are missed in the next. A simple tracker that links boxes between frames, and
+keeps a box for one frame after it disappears, lowers this to 9 to 12\% without changing
+the F1 or the time.
 
-\textbf{Against a detector built for COCO.} Where only COCO's categories are wanted
-and the images look like COCO's, a closed-set detector is the better tool
-(Table~\ref{tab:shift}). On the COCO images and the same L40S,
-YOLO11x~\citep{redmon2016yolo,yolo11} (57M parameters) matches the fast head's F1 (0.715
-against 0.707) in a fifth of its time, and YOLO11n (2.6M) scores 0.612 in a tenth. Away
-from COCO's photos the order reverses. On COCO-O~\citep{mao2023cocoo}, 6{,}782
-human-labelled images of the same categories as sketches, cartoons, paintings, handmade
-objects, tattoos and photos in bad weather, the head scores 0.772 and stays within a point
-of Moondream~3.1 (0.781), while YOLO11x falls to 0.520 and YOLO11n to 0.410: their
-precision holds and their recall halves. Generated images shift less: on 4{,}000 images
-we generated in 88 photographic and artistic media and labelled with the teacher, the head
-scores 0.786, Moondream~3.1 0.795 and YOLO11x 0.734, level with the 4-bit head of the next
-paragraph (0.732); these labels are the teacher's, which favours the heads. The head keeps the robustness of the frozen
-backbone it reads. The backbone also still captions, answers questions and points with
-the same weights; the head is a 50M-parameter addition to them.
+\subsection{What mattered}
+\emph{One step is enough.} We expected that filling the slots would need several
+refinement steps, as in a diffusion model. It does not. Decoding in two or three steps
+gave the same F1 as one. We think this is because an object is only six positions, and
+each one is read by a head the model already has, which leaves little to refine. We
+have not tested this explanation.
 
-\begin{table}[t]
-\centering\small\setlength{\tabcolsep}{4pt}
-\caption{F1 at IoU 0.5 on COCO val and on COCO-O, each model at its threshold tuned on
-COCO.}
-\label{tab:shift}
-\begin{tabular}{@{}lcc@{}}
-\toprule
-Model & COCO & COCO-O \\
-\midrule
-Moondream 3.1 & .700 & \textbf{.781} \\
-Slots, fast & .707 & .772 \\
-Slots, 4-bit backbone & .654 & .721 \\
-YOLO11x & \textbf{.715} & .520 \\
-YOLO11n & .612 & .410 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\emph{Three changes account for most of the accuracy.} The first is reading boxes
+through Moondream's own coordinate head instead of predicting four numbers directly
+(F1 0.429 to 0.563). The second is data: four times more images and longer training
+(to 0.622), keeping small objects in the labels (0.636), and adding the teacher-labelled
+images (0.657 to 0.673). The third is how we pick the final boxes, which added 2.7 points
+without any training. Table~\ref{tab:ablate} in the appendix lists every change we
+tried, including those that did not help.
 
-\textbf{On a device.} To see whether the head survives the weights a phone or a browser
-would hold, we round every backbone weight to 4 bits, a 1.1\,GB download in place of
-3.9\,GB. With one image crop, as the browser runs it, the rank-64 head then scores F1
-0.654 on COCO against 0.705 at full precision, and 0.721 on COCO-O, still 20 points above
-YOLO11x.
+\emph{Smaller weights.} A phone or browser cannot hold the full model, so we tested it
+with every weight of Moondream~2 rounded to 4 bits, which is a 1.1\,GB download instead
+of 3.9\,GB. With one image crop, the rank-64 model then scores 0.654 on COCO instead of
+0.705, and 0.721 on COCO-O, which is still 20 points above YOLO11x.
 
 \section{Limitations}
-The comparison is narrower than the models. The slot head knows COCO's 80 categories,
-whereas Moondream answers free-form phrases, and we have not evaluated on
-LVIS~\citep{gupta2019lvis} or referring expressions~\citep{yu2016refcoco}. The head is
-trained on COCO train images; Moondream probably saw COCO in training too, so VOC, where
-both are out of domain, is the fairer comparison. Without tiles the head's recall of
-objects under one feature-grid cell is 0.20 against Moondream~3.1's 0.36. All times are from
-one GPU type, an L40S, and the test sets are samples of 500 and 1{,}000 images.
+The slot model only knows COCO's 80 categories, while Moondream can be asked for anything
+in free text. We have not tested it on larger vocabularies such as
+LVIS~\citep{gupta2019lvis} or on referring expressions~\citep{yu2016refcoco}. It is
+trained on COCO images, and Moondream has probably seen COCO as well, so VOC is the
+fairer comparison of the two. It misses more small objects than Moondream unless it reads
+tiles. All times come from one type of GPU, and our COCO and VOC test sets are samples of
+500 and 1{,}000 images.
 
 \section{Conclusion}
 We asked whether a small vision-language model could detect objects the way a diffusion
@@ -436,7 +413,7 @@ PyTorch's but not bit-identical.
 
 \begin{table}[h]
 \centering\small\setlength{\tabcolsep}{3pt}
-\caption{One change at a time, COCO val F1 at IoU 0.5 (before $\rightarrow$ after); later rows use the selection of Section 2.}
+\caption{COCO F1 at IoU 0.5 before and after each change.}
 \label{tab:ablate}
 \begin{tabular}{@{}clr@{}}
 \toprule
@@ -472,8 +449,7 @@ PyTorch's but not bit-identical.
 
 \begin{table}[h]
 \centering\small\setlength{\tabcolsep}{3.5pt}
-\caption{MOT17-02 and -09, every third frame (375 frames, 1080p), people only. Seconds
-per frame on one L40S.}
+\caption{People in two MOT17 street scenes, every third frame.}
 \label{tab:video}
 \begin{tabular}{@{}lcccr@{}}
 \toprule
@@ -492,9 +468,7 @@ Slots r64, COCO only, fast & \textbf{.851} & .241 & .376 & \textbf{.087} \\
 
 \begin{table}[h]
 \centering\small\setlength{\tabcolsep}{5pt}
-\caption{The models of Table~\ref{tab:main} on the 500 COCO val2017 images: precision,
-recall and F1 at IoU 0.5, F1 at IoU 0.75, and recall of objects smaller than one cell of
-the $27\times27$ feature grid.}
+\caption{Precision, recall and F1 on COCO for the models of Table~\ref{tab:main}.}
 \label{tab:coco}
 \begin{tabular}{@{}lccccc@{}}
 \toprule
@@ -538,11 +512,7 @@ slot head at the threshold tuned on COCO. Captions give boxes and seconds per im
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.92\textwidth]{selection-areas.jpg}
-\caption{Pooled area under the precision-recall curve (IoU 0.5) and per-category AP
-(IoU 0.5 to 0.95) of every slot head under the final selection, without tiles (solid)
-and with tiles (hatched), on COCO and VOC. The last bars run the rank-64 head on 4-bit
-backbone weights: trained on full precision, trained on the 4-bit backbone, and that with
-one image crop.}
+\caption{Area under the precision-recall curve for every slot model we trained, without tiles (solid) and with tiles (hatched).}
 \label{fig:areas}
 \end{figure}
 \end{document}
