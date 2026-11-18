@@ -198,6 +198,18 @@ Slots r64, COCO only, fast & .809 & .608 & .694 & .559 & \textbf{.862} & .087 & 
 \end{tabular}
 \end{table*}
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.86\textwidth]{speed.jpg}
+\caption{F1 at IoU 0.5 against seconds per image on one L40S, on COCO (left) and VOC
+(right), with the categories present in each image prompted. The fast slot head reaches
+Moondream~3.1's F1 in 2.3 times less time on COCO and 1.5 times less on VOC; tiles add
+1.1 points on COCO at Moondream's time and cost 1.4 on VOC. Moondream's time grows with
+the number of categories asked, the slot head's does not (Table~\ref{tab:main}, last
+column). The F1 axes differ between the panels.}
+\label{fig:speed}
+\end{figure*}
+
 \textbf{Similar quality.} The fast head is level with Moondream~3.1 on COCO and VOC
 (Table~\ref{tab:main}) and gains 12 points of COCO F1 over its own backbone's
 \texttt{detect}; it trades recall for precision. Paired bootstrap intervals put
@@ -211,7 +223,8 @@ same features. Tiling closes that gap (0.37) and lifts COCO F1 to 0.718, at 2.5 
 time; on VOC, whose objects are larger, it costs precision.
 
 \textbf{Much faster.} The slot pass costs 0.016\,s; the vision encoder dominates the
-0.09\,s per image. Cost no longer depends on categories or objects: with all 80 COCO
+0.09\,s per image, 2.3 times less than Moondream~3.1 at the same F1 on COCO and 1.5
+times less on VOC, where an image has fewer categories (Fig.~\ref{fig:speed}). Cost no longer depends on categories or objects: with all 80 COCO
 categories requested, the head needs 0.047\,s per video frame against 2.79\,s for
 Moondream~3.1, about 59$\times$ less.
 

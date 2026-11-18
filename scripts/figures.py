@@ -5,7 +5,7 @@
 Reads `<artifacts>/<run>/heldout.jsonl` for the training runs and
 `<artifacts>/<run>/summary.json` and `predictions.jsonl` for the COCO evaluations, and
 writes `training.png`, `training-small-objects.png`, `coco.png`, `recall-by-size.png`,
-`precision-recall.png`, `areas.png`
+`precision-recall.png`, `areas.png`, `speed.png`
 and three `examples*.png` grids.
 """
 
@@ -736,9 +736,11 @@ SELECTION_SERIES = [
 SELECTION_MODES = (("fast", None), ("tiled", 4))
 
 
-def selection_rows(artifacts):
+def selection_rows(artifacts, runs=None):
+    """Per head, its tests under the current selection by mode: (label, {mode: tests})
+    for SELECTION_SERIES, or (run, {mode: tests}) for the given `runs`."""
     rows = []
-    for label, run in SELECTION_SERIES:
+    for label, run in [(run, run) for run in sorted(runs)] if runs else SELECTION_SERIES:
         path = artifacts / f"{run}-selection.json"
         if not path.exists():
             continue
@@ -868,6 +870,129 @@ def selection_f1_figure(artifacts, out):
         )
     figure.tight_layout()
     figure.savefig(out / "selection-f1.png", dpi=180, facecolor=SURFACE)
+    plt.close(figure)
+
+
+# F1 against seconds per image, all on one L40S. Per point: label, colour, marker,
+# hollow, the slot head and selection mode its F1 comes from (None: the evaluation's own
+# summary), and per dataset the evaluation that timed it with its label's offset in points
+# and alignment.
+SPEED_POINTS = [
+    (
+        "Moondream 2",
+        BLUE,
+        "D",
+        False,
+        None,
+        {
+            "coco": ("moondream2-photon-001", (10, 14, "right")),
+            "voc": ("moondream2-photon-voc", (0, -16, "center")),
+        },
+    ),
+    (
+        "Moondream 3.1",
+        YELLOW,
+        "D",
+        False,
+        None,
+        {
+            "coco": ("moondream31-001", (10, -16, "right")),
+            "voc": ("moondream31-voc", (10, 0, "left")),
+        },
+    ),
+    (
+        "Slots, fast",
+        RED,
+        "o",
+        False,
+        ("slots-teacher-coco-rank128", "fast"),
+        {
+            "coco": ("slots-teacher-coco-rank128-coco-v2", (-8, 14, "center")),
+            "voc": ("slots-teacher-coco-rank128-voc", (-8, 14, "center")),
+        },
+    ),
+    (
+        "Slots, tiled",
+        RED,
+        "o",
+        True,
+        None,
+        {
+            "coco": ("slots-teacher-coco-rank128-coco-final", (10, 14, "right")),
+            "voc": ("slots-teacher-coco-rank128-voc-final", (10, -16, "right")),
+        },
+    ),
+]
+# (name, dataset, its index in a study's tests, title, F1 range, offset of the ratio's text)
+SPEED_PANELS = (
+    ("coco", "coco_val2017", 0, "COCO val2017, 500 images", (0.56, 0.74), 5),
+    ("voc", "voc2007_test", 1, "Pascal VOC 2007 test, 1,000 images", (0.835, 0.865), -13),
+)
+
+
+def speed_figure(artifacts, out):
+    """F1 at IoU 0.5 against seconds per image on COCO and VOC: Moondream 2 and 3.1 and
+    the rank-128 slot head, fast and tiled, each timed on one L40S; the arrow gives the
+    time of Moondream 3.1 over the fast head's."""
+    heads = dict(selection_rows(artifacts, {s[0] for *_, s, _ in SPEED_POINTS if s}))
+    figure, axes = plt.subplots(1, 2, figsize=(11, 4.1), facecolor=SURFACE)
+    for axis, (name, dataset, test, title, limits, ratio_dy) in zip(
+        axes, SPEED_PANELS, strict=True
+    ):
+        style(axis, title)
+        axis.grid(axis="x", color=GRID, linewidth=0.8)
+        placed = {}
+        for label, colour, marker, hollow, source, runs in SPEED_POINTS:
+            run, (dx, dy, align) = runs[name]
+            summary = json.loads((artifacts / run / "summary.json").read_text())
+            result = summary["datasets"][dataset]
+            seconds = result["latency"]["image_seconds"]["mean"]
+            f1 = result["detection"]["iou_0.5"]["f1"]
+            if source:
+                f1 = heads[source[0]][source[1]][test]["iou_0.5"]["f1"]
+            placed[label] = (seconds, f1)
+            axis.scatter(
+                [seconds],
+                [f1],
+                s=110,
+                marker=marker,
+                color=SURFACE if hollow else colour,
+                edgecolor=colour if hollow else SURFACE,
+                linewidth=2,
+                zorder=3,
+            )
+            axis.annotate(
+                f"{label}: {f1:.3f}, {seconds:.3f} s",
+                (seconds, f1),
+                textcoords="offset points",
+                xytext=(dx, dy),
+                ha=align,
+                va="center",
+                fontsize=9,
+                color=INK,
+            )
+        (slow, level), (fast, _) = placed["Moondream 3.1"], placed["Slots, fast"]
+        axis.annotate(
+            "",
+            (fast + 0.006, level),
+            (slow - 0.006, level),
+            arrowprops={"arrowstyle": "->", "color": MUTED, "linewidth": 1.2},
+        )
+        axis.annotate(
+            f"{slow / fast:.1f}× less time",
+            ((slow + fast) / 2, level),
+            textcoords="offset points",
+            xytext=(0, ratio_dy),
+            ha="center",
+            fontsize=8.5,
+            color=MUTED,
+        )
+        axis.set_xlim(0, 0.26)
+        axis.set_ylim(*limits)
+        axis.set_xlabel("Seconds per image on one L40S", fontsize=9, color=MUTED)
+    axes[0].set_ylabel("F1 at IoU 0.5", fontsize=9, color=MUTED)
+    figure.tight_layout()
+    figure.savefig(out / "speed.png", dpi=200, facecolor=SURFACE)
     plt.close(figure)
 
 
@@ -1105,6 +1230,7 @@ def main():
     voc_figure(args.artifacts, args.out)
     selection_area_figure(args.artifacts, args.out)
     selection_f1_figure(args.artifacts, args.out)
+    speed_figure(args.artifacts, args.out)
     selection_pr_figure(args.artifacts, args.out, args.out / "images")
     architecture_images(args.artifacts, args.out)
     area_figure(args.artifacts, args.out)
