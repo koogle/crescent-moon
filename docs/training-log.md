@@ -897,6 +897,13 @@ confidence^0.25, threshold chosen on the tuning split):
 Precision rises by 3 points on both sets and recall falls by 1 to 3; COCO F1 moves by
 -0.4 and VOC by +1.1 from the full image, both inside the 1.5-point noise.
 
+On COCO-O from the full image (runs `coco-o-slots-rank64` and
+`coco-o-slots-generated-rank64`, thresholds 0.29 and 0.31) the pooled F1 is 0.765 without
+the generated images and 0.772 with them (precision 0.786 to 0.803, recall 0.745 to
+0.744). Five of the six domains gain about a point (cartoon 0.773 to 0.785, painting
+0.740 to 0.751, sketch 0.783 to 0.792, weather 0.766 to 0.775, handmade 0.754 to 0.758)
+and tattoo loses three (0.769 to 0.739). The generated images are 7% of the training set.
+
 The generated images cannot serve as a test set for this head.
 
 ### The 4-bit head against YOLO in a browser
