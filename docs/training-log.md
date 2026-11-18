@@ -868,7 +868,7 @@ columns are seconds per image on an L40S in these runs.
 | Rank 64, full image | 0.705 | 0.840 | 0.765 | 0.779 | 0.080 | 0.095 |
 | Rank 64, tiles | 0.714 | 0.841 | 0.773 | 0.796 | 0.226 | 0.332 |
 | Rank 128, full image | 0.707 | 0.858 | 0.772 | 0.786 | 0.080 | |
-| Rank 128, tiles | 0.718 | 0.844 | 0.775 | | 0.229 | 0.334 |
+| Rank 128, tiles | 0.718 | 0.844 | 0.775 | 0.791 | 0.229 | 0.334 |
 
 - The two ranks take the same time: 0.080 s per COCO image each in runs of the same day
   (`slots-teacher-coco-rank128-coco-final-fast`), and 0.091 s each in the earlier paired
