@@ -39,6 +39,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - run: npm install --no-save playwright@1.56.1 && npx playwright install ${{ matrix.browser }}
       - run: system_profiler SPDisplaysDataType SPHardwareDataType | grep -E "Chip|Memory|Chipset|Metal|Cores" || true
       - name: Download the export
