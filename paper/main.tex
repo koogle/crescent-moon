@@ -41,10 +41,10 @@ grows with the number of categories and of objects. We give a \emph{frozen}
 after the image tokens, which one forward pass fills and the model's own coordinate, size
 and vocabulary heads read. Only low-rank adapters at the slot positions and an objectness
 layer are trained, with a Hungarian set loss. On 500 COCO val2017 images the head reaches
-F1 0.707 at IoU~0.5 in 0.091\,s per image on one L40S, where Moondream~3.1 (9B) reaches
+F1 0.707 at IoU~0.5 in 0.091\,s per image on one L40S, where Moondream~3.1 (9.3B) reaches
 0.700 in 0.208\,s. On Pascal VOC 2007, which no model here was tuned on, it scores 0.858
 in 0.063\,s against 0.857 in 0.095\,s. The head finds fewer objects smaller than one
-feature-grid cell than Moondream (recall 0.22 against 0.36); also reading a $2\times2$
+feature-grid cell than Moondream~3.1 (recall 0.20 against 0.36); also reading a $2\times2$
 grid of tiles closes that gap and gives F1 0.718 on COCO, at 2.5 times the time. The
 appendix lists every change we tried, including those that did not help. Because a frame
 costs one pass however many categories are asked for, the head can detect continuously on
@@ -66,7 +66,7 @@ alone can give a small VLM such an output, \emph{n slots, each ``nothing'' or a 
 a label}, so that one forward pass answers every category at once.
 
 We append 48 slots to a frozen Moondream~2 and train about 50M adapter parameters
-(Section~2). The resulting head is level with Moondream~3.1, a 9B model, on COCO and VOC
+(Section~2). The resulting head is level with Moondream~3.1, a 9.3B model, on COCO and VOC
 in 2.3 and 1.5 times less time (Section~3, Fig.~\ref{fig:speed}). Its time does not
 depend on the number of categories, which makes detection on streamed video practical
 (Table~\ref{tab:video}). It finds fewer very small objects unless it also reads tiles,
@@ -197,7 +197,7 @@ COCO image on one L40S (2.9 categories per image); last column: per video frame 
 \toprule
 Model & COCO P & COCO R & COCO F1$_{.5}$ & COCO F1$_{.75}$ & VOC F1$_{.5}$ & s/img & s/frame \\
 \midrule
-Moondream 2 \texttt{detect} (1.9B) & .500 & \textbf{.709} & .587 & .445 & .851 & .220 & -- \\
+Moondream 2 \texttt{detect} (1.9B) & .501 & .706 & .586 & .450 & .851 & .220 & -- \\
 Moondream 3.1 (9.3B MoE) & .682 & \textbf{.719} & .700 & .560 & .857 & .208 & 2.79 \\
 \midrule
 Slots r128, COCO + teacher, fast & \textbf{.811} & .626 & .707 & .566 & .858 & \textbf{.091} & \textbf{.047} \\
@@ -229,8 +229,8 @@ do not reproduce its published ones, whose protocol is not specified.
 
 \textbf{Small objects.} The head misses small objects that Moondream finds in the same
 features. All models read the same $27\times27$ feature grid. On objects of four cells or
-more our recall equals Moondream's (0.87); for objects under one cell it is 0.22 against
-0.36. Also reading a $2\times2$ grid of tiles raises that to 0.37 and COCO F1 to 0.718,
+more our recall is 0.84 against Moondream~3.1's 0.87; for objects under one cell it is
+0.20 against 0.36. Also reading a $2\times2$ grid of tiles raises that to 0.37 and COCO F1 to 0.718,
 at 2.5 times the time. On VOC, whose objects are larger, tiles cost 1.4 points of F1
 through lower precision.
 
@@ -318,12 +318,12 @@ whereas Moondream answers free-form phrases, and we have not evaluated on
 LVIS~\citep{gupta2019lvis} or referring expressions~\citep{yu2016refcoco}. The head is
 trained on COCO train images; Moondream probably saw COCO in training too, so VOC, where
 both are out of domain, is the fairer comparison. Without tiles the head's recall of
-objects under one feature-grid cell is 0.22 against Moondream's 0.36. All times are from
+objects under one feature-grid cell is 0.20 against Moondream~3.1's 0.36. All times are from
 one GPU type, an L40S, and the test sets are samples of 500 and 1{,}000 images.
 
 \section{Conclusion}
 A frozen 1.9B VLM with a 50--100M-parameter slot adapter detects every category in one
-pass at the F1 of a 9B model, in under half its time on COCO and two thirds of it on VOC.
+pass at the F1 of a 9.3B model, in under half its time on COCO and two thirds of it on VOC.
 The larger consequence is for video. A frame costs one pass whatever is asked for, so
 detection can run continuously: at 0.10\,s per detection, detecting every third frame
 keeps pace with 30\,fps, and on two MOT17 sequences the fast head is ahead of
@@ -380,7 +380,7 @@ PyTorch's but not bit-identical.
 \ok & + 18k teacher-labelled images & .657$\rightarrow$.673 \\
 \ok & Combined score, duplicate removal & .674$\rightarrow$.694 \\
 \ok & Fusion at IoU 0.5, box confidence$^{1/4}$ & .700$\rightarrow$.707 \\
-\ok & $2\times2$ tiles (recall $<$1 cell .21$\rightarrow$.37) & .707$\rightarrow$.718 \\
+\ok & $2\times2$ tiles (recall $<$1 cell .20$\rightarrow$.37) & .707$\rightarrow$.718 \\
 \eq & LoRA rank 64$\rightarrow$128 & .694$\rightarrow$.700 \\
 \eq & 2--3 decoding passes instead of 1 & unchanged \\
 \eq & No denoising pass in training & .705$\rightarrow$.705 \\

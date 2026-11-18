@@ -930,14 +930,53 @@ SPEED_PANELS = (
 )
 
 
+# Evaluations that prompt each of 100 COCO images with a set number of categories
+# (`configs/asked-*.json`): (label, colour, marker, run).
+ASKED_SERIES = [
+    ("Moondream 2", BLUE, "D", "asked-moondream2"),
+    ("Moondream 3.1", YELLOW, "D", "asked-moondream31"),
+    ("Slots, fast", RED, "o", "asked-slots-rank128-b"),
+]
+
+
+def asked_panel(axis, artifacts):
+    """Seconds per image against the number of categories asked, on log axes."""
+    style(axis, "COCO val2017, 100 images: time against categories asked")
+    axis.grid(axis="x", color=GRID, linewidth=0.8)
+    for label, colour, marker, run in ASKED_SERIES:
+        datasets = json.loads((artifacts / run / "summary.json").read_text())["datasets"]
+        points = sorted(
+            (int(name.rsplit("_", 1)[1]), result["latency"]["image_seconds"]["mean"])
+            for name, result in datasets.items()
+        )
+        asked, seconds = zip(*points, strict=True)
+        axis.plot(asked, seconds, color=colour, linewidth=2, marker=marker, markersize=6)
+        axis.annotate(
+            f"{label}: {seconds[-1]:.2f} s",
+            (asked[-1], seconds[-1]),
+            textcoords="offset points",
+            xytext=(-6, 9),
+            ha="right",
+            fontsize=9,
+            color=INK,
+        )
+    axis.set_xscale("log")
+    axis.set_yscale("log")
+    axis.set_xticks(asked, [str(n) for n in asked])
+    axis.minorticks_off()
+    axis.set_xlabel("Categories asked per image", fontsize=9, color=MUTED)
+    axis.set_ylabel("Seconds per image on one L40S", fontsize=9, color=MUTED)
+
+
 def speed_figure(artifacts, out):
-    """F1 at IoU 0.5 against seconds per image on COCO and VOC: Moondream 2 and 3.1 and
-    the rank-128 slot head, fast and tiled, each timed on one L40S; the arrow gives the
-    time of Moondream 3.1 over the fast head's."""
+    """Left and middle: F1 at IoU 0.5 against seconds per image on COCO and VOC, for
+    Moondream 2 and 3.1 and the rank-128 slot head, fast and tiled, each timed on one
+    L40S; the arrow gives the time of Moondream 3.1 over the fast head's. Right:
+    `asked_panel`."""
     heads = dict(selection_rows(artifacts, {s[0] for *_, s, _ in SPEED_POINTS if s}))
-    figure, axes = plt.subplots(1, 2, figsize=(11, 4.1), facecolor=SURFACE)
+    figure, axes = plt.subplots(1, 3, figsize=(15.5, 4.1), facecolor=SURFACE)
     for axis, (name, dataset, test, title, limits, ratio_dy) in zip(
-        axes, SPEED_PANELS, strict=True
+        axes, SPEED_PANELS, strict=False
     ):
         style(axis, title)
         axis.grid(axis="x", color=GRID, linewidth=0.8)
@@ -991,6 +1030,7 @@ def speed_figure(artifacts, out):
         axis.set_ylim(*limits)
         axis.set_xlabel("Seconds per image on one L40S", fontsize=9, color=MUTED)
     axes[0].set_ylabel("F1 at IoU 0.5", fontsize=9, color=MUTED)
+    asked_panel(axes[2], artifacts)
     figure.tight_layout()
     figure.savefig(out / "speed.png", dpi=200, facecolor=SURFACE)
     plt.close(figure)
