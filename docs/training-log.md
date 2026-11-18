@@ -853,6 +853,31 @@ photograph (0.734 against 0.639); YOLO11x leads most on a low-poly 3D render (0.
 against 0.741) and a daguerreotype (0.763 against 0.693). The caveat on whose labels these
 are applies here too.
 
+### Both ranks, with and without tiles, on all four test sets
+
+`slots-teacher-coco-rank64` and `-rank128` at their tuned thresholds (0.29 and 0.31 from
+the full image, 0.35 and 0.33 with 2 x 2 tiles), F1 at IoU 0.5; runs
+`slots-teacher-coco-rank64-{coco,voc}-final{,-fast}`, `coco-o-slots-rank64{,-tiled}`,
+`coco-o-slots-rank128-tiled`, `generated-wide-slots-rank64{,-tiled}` and
+`generated-wide-moondream2`. COCO and VOC F1 are the selection study's; the last two
+columns are seconds per image on an L40S in these runs.
+
+| Model | COCO | VOC | COCO-O | Generated, 88 media | s, COCO | s, COCO-O |
+|---|---|---|---|---|---|---|
+| Moondream 2 | 0.586 | 0.851 | 0.773 | 0.641 | 0.220 | |
+| Rank 64, full image | 0.705 | 0.840 | 0.765 | 0.779 | 0.080 | 0.095 |
+| Rank 64, tiles | 0.714 | 0.841 | 0.773 | 0.796 | 0.226 | 0.332 |
+| Rank 128, full image | 0.707 | 0.858 | 0.772 | 0.786 | 0.080 | |
+| Rank 128, tiles | 0.718 | 0.844 | 0.775 | | 0.229 | 0.334 |
+
+- The two ranks take the same time: 0.080 s per COCO image each in runs of the same day
+  (`slots-teacher-coco-rank128-coco-final-fast`), and 0.091 s each in the earlier paired
+  run. The evaluations of the final defaults score rank 64 at 0.702 from the full image and
+  0.712 with tiles, 0.3 and 0.2 points under the study.
+- Tiles add under a point on COCO-O and 1.7 points on the generated set at rank 64, where
+  the tiled head is level with Moondream 3.1 (0.796 against 0.795).
+- Moondream 2 on the generated set has recall 0.781 and precision 0.544.
+
 ### The 4-bit head against YOLO in a browser
 
 `web/tests/yolo.test.js` runs YOLO's ONNX files (640 x 640 input, exported by

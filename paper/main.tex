@@ -220,21 +220,21 @@ label filter.
 \begin{table*}[t]
 \centering\small\setlength{\tabcolsep}{7pt}
 \caption{F1 at IoU 0.5 on the four test sets, and seconds per COCO image on one L40S.
-Cells marked \pend{} are still being measured.}
+The cell marked \pend{} is still being measured.}
 \label{tab:main}
 \begin{tabular}{@{}lccccr@{}}
 \toprule
 Model & COCO & VOC & COCO-O & Generated & s/img \\
 \midrule
-Moondream 2 \texttt{detect} & .586 & .851 & .773 & \pend & .220 \\
+Moondream 2 \texttt{detect} & .586 & .851 & .773 & .641 & .220 \\
 Moondream 3.1 & .700 & .857 & \textbf{.781} & \textbf{.795} & .208 \\
 YOLO11n & .612 & .770 & .410 & .582 & \textbf{.008} \\
 YOLO11x & .715 & .838 & .520 & .734 & .018 \\
 \midrule
 Slots, rank 64 & .705 & .840 & .765 & .779 & .091 \\
-Slots, rank 64, with tiles & .714 & .841 & \pend & \pend & .226 \\
+Slots, rank 64, with tiles & .714 & .841 & .773 & \textbf{.796} & .226 \\
 Slots, rank 128 & .707 & \textbf{.858} & .772 & .786 & .091 \\
-Slots, rank 128, with tiles & \textbf{.718} & .844 & \pend & \pend & .229 \\
+Slots, rank 128, with tiles & \textbf{.718} & .844 & .775 & \pend & .229 \\
 \bottomrule
 \end{tabular}
 \end{table*}
