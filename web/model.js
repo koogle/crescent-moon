@@ -382,10 +382,15 @@ export async function tune(device, manifest, tensors, { budget = 10, slow = 3, h
   const qkv = storage(device, rows * 3 * T.dim * 4);
   const layer = tensors["text.blocks.0.mlp.fc1"];
   const now = () => performance.now() / 1000;
+  // A lost device answers at once and does no work, so its times mean nothing.
+  let lost = null;
+  device.lost.then((info) => { lost = info; });
   const time = async (make, repeats) => {
     const start = now();
     device.queue.submit([encode(device, Array.from({ length: repeats }, make).flat())]);
     await device.queue.onSubmittedWorkDone();
+    await Promise.resolve();
+    if (lost) throw new Error(`the GPU device was lost while timing kernels (${lost.message || lost.reason})`);
     return (now() - start) / repeats;
   };
   const product = (tuning) => {
@@ -469,9 +474,13 @@ async function tuned(device, manifest, tensors) {
     if (kept) return kept;
   } catch { /* no storage, or nothing usable in it: measure */ }
   let tuning;
+  let lost = false;
+  device.lost.then(() => { lost = true; });
   try {
     tuning = await tune(device, manifest, tensors);
   } catch (error) {
+    await Promise.resolve();
+    if (lost) throw error;  // nothing runs on a lost device
     return { ...TUNING, seconds: {}, error: String(error) };
   }
   try { localStorage.setItem(key, JSON.stringify(tuning)); } catch { /* not kept */ }

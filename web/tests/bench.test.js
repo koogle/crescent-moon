@@ -20,6 +20,7 @@ export async function run(query, log) {
   log(`adapter: ${JSON.stringify(described)}`);
   const device = await requestDevice(["timestamp-query", "shader-f16"]);
   device.addEventListener("uncapturederror", (event) => log(`GPU ERROR ${event.error.message}`));
+  device.lost.then((info) => log(`GPU DEVICE LOST ${info.reason}: ${info.message}`));
   const manifest = await (await fetch(new URL("manifest.json", base))).json();
   const started = performance.now();
   const tensors = await loadWeights(device, base, manifest);
