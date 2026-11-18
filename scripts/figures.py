@@ -952,7 +952,9 @@ def asked_panel(axis, artifacts):
         asked, seconds = zip(*points, strict=True)
         axis.plot(asked, seconds, color=colour, linewidth=2, marker=marker, markersize=6)
         axis.annotate(
-            f"{label}: {seconds[-1]:.2f} s",
+            f"{label}: {seconds[-1]:.3f} s"
+            if seconds[-1] < 0.1
+            else f"{label}: {seconds[-1]:.2f} s",
             (asked[-1], seconds[-1]),
             textcoords="offset points",
             xytext=(-6, 9),
@@ -963,6 +965,9 @@ def asked_panel(axis, artifacts):
     axis.set_xscale("log")
     axis.set_yscale("log")
     axis.set_xticks(asked, [str(n) for n in asked])
+    ticks = (0.1, 0.3, 1, 3)
+    axis.set_yticks(ticks, [str(t) for t in ticks])
+    axis.set_ylim(0.05, 5)
     axis.minorticks_off()
     axis.set_xlabel("Categories asked per image", fontsize=9, color=MUTED)
     axis.set_ylabel("Seconds per image on one L40S", fontsize=9, color=MUTED)

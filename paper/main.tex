@@ -190,17 +190,18 @@ confidences, so it has one operating point; the slot head receives no prompt.
 \begin{table*}[t]
 \centering\small\setlength{\tabcolsep}{4pt}
 \caption{COCO val2017 (500 images) and VOC 2007 test (1{,}000 images). Seconds per
-COCO image on one L40S (2.9 categories per image); last column: per video frame with all
-80 categories, detection every third frame. Slot heads use thresholds tuned on COCO.}
+COCO image on one L40S with the categories present prompted (2.9 per image); last column:
+with all 80 categories asked, on 100 of the images. Slot heads use thresholds tuned on
+COCO.}
 \label{tab:main}
 \begin{tabular}{@{}lcccccrr@{}}
 \toprule
-Model & COCO P & COCO R & COCO F1$_{.5}$ & COCO F1$_{.75}$ & VOC F1$_{.5}$ & s/img & s/frame \\
+Model & COCO P & COCO R & COCO F1$_{.5}$ & COCO F1$_{.75}$ & VOC F1$_{.5}$ & s/img & s/img, 80 \\
 \midrule
-Moondream 2 \texttt{detect} (1.9B) & .501 & .706 & .586 & .450 & .851 & .220 & -- \\
-Moondream 3.1 (9.3B MoE) & .682 & \textbf{.719} & .700 & .560 & .857 & .208 & 2.79 \\
+Moondream 2 \texttt{detect} (1.9B) & .501 & .706 & .586 & .450 & .851 & .220 & 1.52 \\
+Moondream 3.1 (9.3B MoE) & .682 & \textbf{.719} & .700 & .560 & .857 & .208 & 2.67 \\
 \midrule
-Slots r128, COCO + teacher, fast & \textbf{.811} & .626 & .707 & .566 & .858 & \textbf{.091} & \textbf{.047} \\
+Slots r128, COCO + teacher, fast & \textbf{.811} & .626 & .707 & .566 & .858 & \textbf{.091} & \textbf{.082} \\
 Slots r128, COCO + teacher, tiled & .743 & .695 & \textbf{.718} & \textbf{.586} & .844 & .229 & -- \\
 Slots r64, COCO only, fast & .809 & .608 & .694 & .559 & \textbf{.862} & .087 & -- \\
 \bottomrule
@@ -209,13 +210,14 @@ Slots r64, COCO only, fast & .809 & .608 & .694 & .559 & \textbf{.862} & .087 & 
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.86\textwidth]{speed.jpg}
-\caption{F1 at IoU 0.5 against seconds per image on one L40S, on COCO (left) and VOC
-(right), with the categories present in each image prompted. The fast slot head reaches
+\includegraphics[width=\textwidth]{speed.jpg}
+\caption{Left and middle: F1 at IoU 0.5 against seconds per image on one L40S, on COCO
+and VOC, with the categories present in each image prompted. The fast slot head reaches
 Moondream~3.1's F1 in 2.3 times less time on COCO and 1.5 times less on VOC; tiles add
-1.1 points on COCO at Moondream's time and cost 1.4 on VOC. Moondream's time grows with
-the number of categories asked, the slot head's does not (Table~\ref{tab:main}, last
-column). The F1 axes differ between the panels.}
+1.1 points on COCO at Moondream's time and cost 1.4 on VOC. The F1 axes differ between
+the two panels. Right: seconds per image against the number of categories asked, on 100
+COCO images and log axes. Moondream's time grows with the categories; the head's stays at
+0.08\,s, 33 times less than Moondream~3.1's with all 80.}
 \label{fig:speed}
 \end{figure*}
 
@@ -240,8 +242,11 @@ has fewer categories, the times are 0.063\,s and 0.095\,s (Fig.~\ref{fig:speed})
 are means over the test images with the categories present in each image prompted (2.9
 per COCO image), and they include the vision encoder, which dominates ours: the slot pass
 itself costs 0.016\,s. Moondream's time grows with the number of categories asked and
-the head's does not. With all 80 COCO categories requested, a video frame costs the head
-0.047\,s and Moondream~3.1 2.79\,s (Table~\ref{tab:main}, last column).
+the head's does not (Fig.~\ref{fig:speed}, right). With all 80 COCO categories asked on
+100 of the images, the head takes 0.082\,s per image, Moondream~2 1.52\,s and
+Moondream~3.1 2.67\,s, 33 times as long. Asked for a category that is absent, Moondream
+often answers all the same: Moondream~3.1 returns a box for 71\% of the absent categories,
+so its precision with all 80 asked is 0.05, where the head's is 0.79.
 
 \textbf{Streamed video.} Because a frame costs one pass however many categories are
 asked for, the head can run on live video. On two MOT17~\citep{milan2016mot16} street
