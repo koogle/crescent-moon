@@ -37,8 +37,10 @@
 \begin{abstract}
 \noindent Small vision-language models (VLMs) such as Moondream detect objects by
 decoding one coordinate token at a time, with one prompt per category, so their latency
-grows with the number of categories and of objects. We give a \emph{frozen}
-1.9B-parameter Moondream~2 a set output instead: 48 slots of six blank positions appended
+grows with the number of categories and of objects. Masked diffusion language models draft a whole
+sequence in parallel and refine it over several steps; we asked whether a VLM could
+draft its boxes that way, and found that one step is enough. We give a \emph{frozen}
+1.9B-parameter Moondream~2 a set output: 48 slots of six blank positions appended
 after the image tokens, which one forward pass fills and the model's own coordinate, size
 and vocabulary heads read. Only low-rank adapters at the slot positions and an objectness
 layer are trained, with a Hungarian set loss. On 500 COCO val2017 images the head reaches
@@ -46,8 +48,8 @@ F1 0.707 at IoU~0.5 in 0.091\,s per image on one L40S, where Moondream~3.1 (9.3B
 0.700 in 0.208\,s. On Pascal VOC 2007, which no model here was tuned on, it scores 0.858
 in 0.063\,s against 0.857 in 0.095\,s. The head finds fewer objects smaller than one
 feature-grid cell than Moondream~3.1 (recall 0.20 against 0.36); also reading a $2\times2$
-grid of tiles closes that gap and gives F1 0.718 on COCO, at 2.5 times the time. The
-appendix lists every change we tried, including those that did not help. Because a frame
+grid of tiles closes that gap and gives F1 0.718 on COCO, at 2.5 times the time. A
+second or third decoding step leaves F1 unchanged. Because a frame
 costs one pass however many categories are asked for, the head can detect continuously on
 streamed video.
 \end{abstract}
@@ -76,6 +78,14 @@ each return a box or ``no object'' in one pass. It usually comes as a dedicated
 detector~\citep{liu2024groundingdino,minderer2022owlvit}. We ask whether post-training
 alone can give a small VLM such an output, \emph{n slots, each ``nothing'' or a box with
 a label}, so that one forward pass answers every category at once.
+
+The idea came from language models that draft instead of writing left to right. Masked
+diffusion models~\citep{austin2021d3pm,sahoo2024mdlm,nie2025llada} and
+MaskGIT~\citep{chang2022maskgit} start from a sequence of blanks, fill every position in
+parallel and refine the draft over several steps. A box and its label are six tokens, so
+a set of boxes is a short sequence that could be drafted the same way. We expected
+detection to need a few refinement steps. It needs one: the first draft is as good as
+the third (Section~3), and that single step is what makes the head fast.
 
 We append 48 slots to a frozen Moondream~2 and train about 50M adapter parameters
 (Section~2). The resulting head is level with Moondream~3.1, a 9.3B model, on COCO and VOC
@@ -162,9 +172,10 @@ mask embedding plus its slot's query and its role (x, y, size, or label token). 
 see the image and each other, and one forward pass fills them all: positions 0--2 are
 read through the region head's 1{,}024-bin coordinate and size decoders (box centre,
 width and height), positions 3--5 through the vocabulary head (a three-token label), and
-position~0 also gives an objectness logit. This is parallel masked-token decoding as in
-MaskGIT~\citep{chang2022maskgit} and masked diffusion
-models~\citep{austin2021d3pm,sahoo2024mdlm,nie2025llada}, with one step.
+position~0 also gives an objectness logit. This is the first step of masked-diffusion
+decoding~\citep{chang2022maskgit,austin2021d3pm,sahoo2024mdlm,nie2025llada}: every
+position starts masked and is predicted at once. Further steps would reveal the most
+confident positions and predict the rest again; we run none.
 
 \textbf{Training.} The backbone stays frozen. LoRA adapters~\citep{hu2022lora} of rank
 16--128 act only at slot positions, so the image prefix and the model's existing skills
@@ -246,17 +257,18 @@ and log axes. Moondream's time grows with the categories; the head's stays at 0.
 \label{fig:asked}
 \end{figure}
 
-\textbf{Speed.} On one L40S the fast head takes 0.091\,s per COCO image and
+\textbf{Speed.} The slot pass costs 0.016\,s: all 48 slots, 288 positions, in one pass of
+the decoder. The rest of an image's time is the vision encoder and the image prefix,
+which Moondream pays too. On one L40S the fast head takes 0.091\,s per COCO image and
 Moondream~3.1 takes 0.208\,s, 2.3 times as long, at the same F1; on VOC, where an image
 has fewer categories, the times are 0.063\,s and 0.095\,s (Fig.~\ref{fig:speed}). These
 are means over the test images with the categories present in each image prompted (2.9
-per COCO image), and they include the vision encoder, which dominates ours: the slot pass
-itself costs 0.016\,s. Moondream's time grows with the number of categories asked and
-the head's does not (Fig.~\ref{fig:asked}). With all 80 COCO categories asked on
-100 of the images, the head takes 0.082\,s per image, Moondream~2 1.52\,s and
-Moondream~3.1 2.67\,s, 33 times as long. Asked for a category that is absent, Moondream
-often answers all the same: Moondream~3.1 returns a box for 71\% of the absent categories,
-so its precision with all 80 asked is 0.05, where the head's is 0.79.
+per COCO image). As expected of one prompt per category, Moondream's time grows with the
+number asked, and the head's stays where it is (Fig.~\ref{fig:asked}): with all 80 COCO
+categories asked on 100 of the images, the head takes 0.082\,s per image, Moondream~2
+1.52\,s and Moondream~3.1 2.67\,s. Asked for a category that is absent, Moondream often
+answers all the same: Moondream~3.1 returns a box for 71\% of the absent categories, so
+its precision with all 80 asked is 0.05, where the head's is 0.79.
 
 \textbf{Streamed video.} Because a frame costs one pass however many categories are
 asked for, the head can run on live video. On two MOT17~\citep{milan2016mot16} street
@@ -293,20 +305,25 @@ phone or browser would hold it.}
 \label{fig:pr}
 \end{figure*}
 
-\textbf{What mattered.} Four findings account for the path from F1 0.429 to 0.718 on
-COCO; Table~\ref{tab:ablate} in the appendix lists every change, one at a time.
+\textbf{One step is enough.} The head is a masked-diffusion decoder run for a single
+step, and nothing we tried made further steps pay. Decoding in two or three steps,
+revealing the most confident positions between them, left COCO F1 unchanged. Training
+without the second, denoising pass gave the same F1 (0.705) in three quarters of the
+time. We conjecture that six positions per object, each read through a head the model
+already has, leave little for refinement to correct; we have not tested this, and
+labels longer than three tokens may behave differently.
+
+\textbf{What else mattered.} Three findings account for the path from F1 0.429 to 0.718
+on COCO; Table~\ref{tab:ablate} in the appendix lists every change, one at a time.
 \emph{(i)~The model's own coordinate bins.} Reading boxes through Moondream's
 1{,}024-bin region head instead of regressing four numbers was the largest single gain
 (0.429 to 0.563). \emph{(ii)~Data.} Four times the images with three times the steps
 (0.563 to 0.622), small objects kept in the labels (0.636) and 18k teacher-labelled
-images added to COCO (0.657 to 0.673) each helped, whereas training on the teacher's labels
-without COCO lost 1.3 points. \emph{(iii)~Selection.} A combined score with fusion of
-duplicates added 2.7 points without retraining, and tiles another 1.1. \emph{(iv)~No
-gain from more machinery.} Beyond rank 64, nothing we added to the head moved COCO F1 by
-more than 0.6 points: rank 128, two or three decoding passes, the denoising pass,
-category prompts, a size-weighted loss. We conjecture that the frozen image features,
-not the head, now limit the result; we have not tested this.
-
+images added to COCO (0.657 to 0.673) each helped (Fig.~\ref{fig:pr}), whereas training
+on the teacher's labels without COCO lost 1.3 points. \emph{(iii)~Selection.} A combined
+score with fusion of duplicates added 2.7 points without retraining, and tiles another
+1.1. Beyond rank 64, added capacity or conditioning moved COCO F1 by at most 0.6 points:
+rank 128, category prompts, a size-weighted loss.
 
 \section{Limitations}
 The comparison is narrower than the models. The slot head knows COCO's 80 categories,
