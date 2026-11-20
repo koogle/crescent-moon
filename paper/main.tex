@@ -16,9 +16,12 @@
 \usepackage{titlesec}
 \usepackage{tikz}
 \usetikzlibrary{positioning,calc,arrows.meta}
-\captionsetup{font=small,labelfont=bf,skip=6pt}
-\titleformat{\section}{\large\bfseries}{\thesection}{0.6em}{}
-\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\usepackage[scaled=0.88]{helvet}
+\usepackage{etoolbox}
+\captionsetup{font={small,sf},labelfont=bf,skip=7pt}
+\AtBeginEnvironment{tabular}{\sffamily\renewcommand{\arraystretch}{1.28}}
+\titleformat{\section}{\large\sffamily\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\sffamily\bfseries}{\thesubsection}{0.6em}{}
 \titlespacing*{\section}{0pt}{1.4ex plus 0.4ex}{0.7ex}
 \titlespacing*{\subsection}{0pt}{1.1ex plus 0.3ex}{0.4ex}
 \setlength{\bibsep}{2pt plus 0.3pt}
@@ -29,7 +32,7 @@
 \newcommand{\eq}{$\circ$}
 \newcommand{\pend}{$\ast$}
 
-\title{\LARGE\bfseries Crescent Moon: One Pass Object Detection\\ from a Small Vision-Language Model}
+\title{\LARGE\sffamily\bfseries Crescent Moon: One Pass Object Detection\\ from a Small Vision-Language Model}
 \author{Jakob Frick\\ \normalsize\texttt{jakob.maria.frick@gmail.com}}
 \date{}
 
