@@ -1,10 +1,7 @@
 # Crescent Moon
 
-[![Open in Spaces](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-sm.svg)](https://huggingface.co/spaces/jfrick/crescent-moon)
-
-**Demo: <https://huggingface.co/spaces/jfrick/crescent-moon>** (a Hugging Face Space: live
-detection on a camera or a video file, with the 4-bit detector running in the browser on
-WebGPU, image comparison with Moondream 2, and streamed video).
+[![Demo on Huggingface](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-sm.svg)](https://huggingface.co/spaces/jfrick/crescent-moon) live
+detection on a camera or a video file, with the 4-bit version running in the browser and streamed video support.
 
 **Fast object detection from a small vision-language model via slots.**
 
