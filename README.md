@@ -68,33 +68,6 @@ result["boxes"], result["scores"]  # per phrase: [x0, y0, x1, y1] in pixels, and
 Phrases are COCO category names. `space/demo.json` lists the published heads with their
 thresholds.
 
-The demo is the Space in `space/` (`app.py`, the camera page `camera.html`): Gradio on
-ZeroGPU, with Moondream 2 and the slot heads on the Space's GPU and the 4-bit detector in
-the visitor's browser. Assemble it with the package, the browser runtime and example
-images, and push it:
-
-```sh
-uv run python scripts/push_space.py --examples artifacts/demo-examples --push
-```
-
-In the browser, `web/` runs the detector on WebGPU with hand-written WGSL kernels. Export
-a head, then test the kernels and the whole pass against PyTorch:
-
-```sh
-uv run --extra model python scripts/export_web.py --head artifacts/heads/RUN/head.pt \
-  --out artifacts/web/RUN-w4 --bits 4 --threshold 0.29 --images artifacts/web-images/*.jpg
-node web/tests/run.cjs kernels
-node web/tests/run.cjs reference --export artifacts/web/RUN-w4 --timeout 300
-```
-
-The same suites, and `bench` for seconds per stage and kernel, run on a Modal GPU through
-Chromium's WebGPU against an export on the volume:
-
-```sh
-uv run modal run modal_app.py::browser --run-id RUN --export slots-teacher-coco-rank64-w4 \
-  --suites bench,reference
-```
-
 ## Training
 
 A head is one config in `configs/` and one Modal call (an H100, about three hours for
@@ -134,26 +107,3 @@ uv run python -m crescent_moon.run score --predictions artifacts/RUN-coco/predic
 `scripts/study_selection.py` uses to choose the threshold on `configs/slots-coco-tune.json`.
 Results land on the volume under `evaluations/<run id>/` and the launching command saves
 the summary under `artifacts/<run id>/`.
-
-## Development
-
-[`AGENTS.md`](AGENTS.md) holds the rules; the main ones:
-
-- **Layout.** `src/crescent_moon/` is the package (`slots.py` head and loss,
-  `train_slots.py` training and `SlotDetector`, `merge.py` selection, `run.py` evaluation,
-  `tasks.py` datasets, `metrics.py`), `web/` the browser runtime, `modal_app.py` the Modal app,
-  `space/` the demo Space, `configs/` run configs, `scripts/` studies and exports,
-  `paper/` the LaTeX paper (`latexmk -pdf -outdir=../artifacts/paper main.tex` from
-  `paper/`).
-- **One of each.** One training loop, one evaluation harness, one launcher, one
-  selection; a new model, dataset or study extends them.
-- **Modal jobs stop by themselves.** Every call has `retries=0`; evaluations stop within
-  one hour of launch and training within eight, enforced by a separate supervisor
-  (`src/crescent_moon/deadline.py`). A preempted evaluation continues from the images it
-  recorded, and preempted training from its last held-out evaluation.
-- **Git holds code, Hugging Face holds outputs.** Checkpoints, result JSONs, figures and
-  exports go to the HF repositories above, downloaded into the ignored `artifacts/` when
-  a script needs them. Never commit credentials or checkpoints.
-- **Results are written down where they belong.** A measured result gets its table and
-  run id in `docs/training-log.md`, including runs that did not help; `docs/results.md`
-  carries the headline numbers.
