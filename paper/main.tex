@@ -76,8 +76,8 @@
   the model's existing coordinate, size, and vocabulary heads. Training only slot-level
   low-rank adapters and a linear objectness head with a Hungarian set loss on 46k COCO and
   17.7k teacher-labelled images, the resulting head matches Moondream~3.1 (9.3B) F1 in
-  less than half the time on COCO val2017 (0.091\,s vs.\ 0.208\,s) and ties it on Pascal
-  VOC 2007 (0.858 vs.\ 0.857), which no model was tuned on. Unlike dedicated detectors
+  less than half the time on COCO val2017 (0.090\,s vs.\ 0.204\,s) and ties it on Pascal
+  VOC 2007 (0.857 vs.\ 0.862), which no model was tuned on. Unlike dedicated detectors
   such as YOLO11x, it stays robust under domain shift on COCO-O, and its flat sub-100\,ms
   latency makes continuous detection on streamed video practical regardless of category
   count. Small-object recall lags Moondream~3.1 (sub-cell recall 0.20 vs.\ 0.36), a gap
@@ -126,20 +126,20 @@
   }
   \draw[ax] (0,0)--(3.2,0); \draw[ax] (0,0)--(0,2.1);
   \node[anchor=south west, font=\scriptsize\sffamily\bfseries, text=ink] at (0,2.18) {COCO Precision};
-  % Points: x = s*12.8, y = (val-0.45)/0.40 * 2.1
-  % MD2: (0.220, 0.501) -> (2.816, 0.268)
-  % MD3: (0.208, 0.682) -> (2.662, 1.218)
-  % Fast: (0.091, 0.811) -> (1.165, 1.895)
-  % Tiled: (0.229, 0.743) -> (2.931, 1.538)
-  \draw[cSlot!55, densely dashed, line width=0.7pt] (1.165,1.895)--(2.931,1.538);
-  \path[md2] (2.816,0.268) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
-  \node[ptlab, anchor=east] at (2.68,0.27) {.501};
-  \path[md3] (2.662,1.218) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
-  \node[ptlab, anchor=east] at (2.52,1.22) {.682};
-  \draw[sfast] (1.165,1.895) circle (0.09);
-  \node[ptlab, anchor=west] at (1.28,1.92) {.811};
-  \draw[stile] (2.931,1.538) circle (0.085);
-  \node[ptlab, anchor=south east] at (2.90,1.60) {.743};
+  % x = s*12.8, y = (val-0.45)/0.40 * 2.1
+  % MD2: (0.217, 0.518) -> (2.778, 0.357)
+  % MD3: (0.204, 0.663) -> (2.611, 1.118)
+  % Fast: (0.090, 0.801) -> (1.152, 1.843)
+  % Tiled: (0.223, 0.739) -> (2.854, 1.517)
+  \draw[cSlot!55, densely dashed, line width=0.7pt] (1.152,1.843)--(2.854,1.517);
+  \path[md2] (2.778,0.357) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=east] at (2.648,0.357) {.518};
+  \path[md3] (2.611,1.118) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=east] at (2.481,1.118) {.663};
+  \draw[sfast] (1.152,1.843) circle (0.09);
+  \node[ptlab, anchor=west] at (1.272,1.863) {.801};
+  \draw[stile] (2.854,1.517) circle (0.085);
+  \node[ptlab, anchor=south east] at (2.814,1.577) {.739};
 \end{scope}
 
 % Panel 2: COCO Recall (y: 0.55..0.75)
@@ -155,20 +155,20 @@
   }
   \draw[ax] (0,0)--(3.2,0); \draw[ax] (0,0)--(0,2.1);
   \node[anchor=south west, font=\scriptsize\sffamily\bfseries, text=ink] at (0,2.18) {COCO Recall};
-  % y = (val-0.55)/0.20 * 2.1
-  % MD2: (0.220, 0.706) -> (2.816, 1.638)
-  % MD3: (0.208, 0.719) -> (2.662, 1.775)
-  % Fast: (0.091, 0.626) -> (1.165, 0.798)
-  % Tiled: (0.229, 0.695) -> (2.931, 1.523)
-  \draw[cSlot!55, densely dashed, line width=0.7pt] (1.165,0.798)--(2.931,1.523);
-  \path[md2] (2.816,1.638) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
-  \node[ptlab, anchor=east] at (2.68,1.58) {.706};
-  \path[md3] (2.662,1.775) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
-  \node[ptlab, anchor=south east] at (2.62,1.83) {.719};
-  \draw[sfast] (1.165,0.798) circle (0.09);
-  \node[ptlab, anchor=north] at (1.165,0.68) {.626};
-  \draw[stile] (2.931,1.523) circle (0.085);
-  \node[ptlab, anchor=north] at (2.931,1.40) {.695};
+  % x = s*12.8, y = (val-0.55)/0.20 * 2.1
+  % MD2: (0.217, 0.695) -> (2.778, 1.522)
+  % MD3: (0.204, 0.707) -> (2.611, 1.648)
+  % Fast: (0.090, 0.616) -> (1.152, 0.693)
+  % Tiled: (0.223, 0.686) -> (2.854, 1.428)
+  \draw[cSlot!55, densely dashed, line width=0.7pt] (1.152,0.693)--(2.854,1.428);
+  \path[md2] (2.778,1.522) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=east] at (2.648,1.522) {.695};
+  \path[md3] (2.611,1.648) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=south east] at (2.571,1.708) {.707};
+  \draw[sfast] (1.152,0.693) circle (0.09);
+  \node[ptlab, anchor=north] at (1.152,0.573) {.616};
+  \draw[stile] (2.854,1.428) circle (0.085);
+  \node[ptlab, anchor=north] at (2.854,1.308) {.686};
 \end{scope}
 
 % Panel 3: VOC Precision (y: 0.74..0.86)
@@ -184,20 +184,20 @@
   }
   \draw[ax] (0,0)--(3.2,0); \draw[ax] (0,0)--(0,2.1);
   \node[anchor=south west, font=\scriptsize\sffamily\bfseries, text=ink] at (0,2.18) {VOC Precision};
-  % y = (val-0.74)/0.12 * 2.1
-  % MD2: (0.088, 0.787) -> (1.126, 0.823)
-  % MD3: (0.095, 0.806) -> (1.216, 1.155)
-  % Fast: (0.063, 0.821) -> (0.806, 1.418)
-  % Tiled: (0.200, 0.778) -> (2.560, 0.665)
-  \draw[cSlot!55, densely dashed, line width=0.7pt] (0.806,1.418)--(2.560,0.665);
-  \path[md2] (1.126,0.823) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
-  \node[ptlab, anchor=north] at (1.126,0.70) {.787};
-  \path[md3] (1.216,1.155) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
-  \node[ptlab, anchor=west] at (1.33,1.20) {.806};
-  \draw[sfast] (0.806,1.418) circle (0.09);
-  \node[ptlab, anchor=south] at (0.806,1.53) {.821};
-  \draw[stile] (2.560,0.665) circle (0.085);
-  \node[ptlab, anchor=north] at (2.560,0.54) {.778};
+  % x = s*12.8, y = (val-0.74)/0.12 * 2.1
+  % MD2: (0.085, 0.799) -> (1.088, 1.033)
+  % MD3: (0.096, 0.821) -> (1.229, 1.417)
+  % Fast: (0.050, 0.824) -> (0.64, 1.47)
+  % Tiled: (0.202, 0.787) -> (2.586, 0.823)
+  \draw[cSlot!55, densely dashed, line width=0.7pt] (0.64,1.47)--(2.586,0.823);
+  \path[md2] (1.088,1.033) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=north] at (1.088,0.913) {.799};
+  \path[md3] (1.229,1.417) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=west] at (1.349,1.437) {.821};
+  \draw[sfast] (0.64,1.47) circle (0.09);
+  \node[ptlab, anchor=south] at (0.640,1.580) {.824};
+  \draw[stile] (2.586,0.823) circle (0.085);
+  \node[ptlab, anchor=north] at (2.586,0.703) {.787};
 \end{scope}
 
 % Panel 4: VOC Recall (y: 0.88..0.94)
@@ -213,20 +213,20 @@
   }
   \draw[ax] (0,0)--(3.2,0); \draw[ax] (0,0)--(0,2.1);
   \node[anchor=south west, font=\scriptsize\sffamily\bfseries, text=ink] at (0,2.18) {VOC Recall};
-  % y = (val-0.88)/0.06 * 2.1
-  % MD2: (0.088, 0.927) -> (1.126, 1.645)
-  % MD3: (0.095, 0.915) -> (1.216, 1.225)
-  % Fast: (0.063, 0.898) -> (0.806, 0.630)
-  % Tiled: (0.200, 0.922) -> (2.560, 1.470)
-  \draw[cSlot!55, densely dashed, line width=0.7pt] (0.806,0.630)--(2.560,1.470);
-  \path[md2] (1.126,1.645) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
-  \node[ptlab, anchor=south] at (1.126,1.76) {.927};
-  \path[md3] (1.216,1.225) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
-  \node[ptlab, anchor=west] at (1.33,1.24) {.915};
-  \draw[sfast] (0.806,0.630) circle (0.09);
-  \node[ptlab, anchor=north] at (0.806,0.51) {.898};
-  \draw[stile] (2.560,1.470) circle (0.085);
-  \node[ptlab, anchor=south] at (2.560,1.59) {.922};
+  % x = s*12.8, y = (val-0.88)/0.06 * 2.1
+  % MD2: (0.085, 0.909) -> (1.088, 1.015)
+  % MD3: (0.096, 0.907) -> (1.229, 0.945)
+  % Fast: (0.050, 0.892) -> (0.64, 0.42)
+  % Tiled: (0.202, 0.922) -> (2.586, 1.47)
+  \draw[cSlot!55, densely dashed, line width=0.7pt] (0.64,0.42)--(2.586,1.47);
+  \path[md2] (1.088,1.015) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=south] at (1.088,1.125) {.909};
+  \path[md3] (1.229,0.945) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=west] at (1.349,0.965) {.907};
+  \draw[sfast] (0.64,0.42) circle (0.09);
+  \node[ptlab, anchor=north] at (0.640,0.300) {.892};
+  \draw[stile] (2.586,1.47) circle (0.085);
+  \node[ptlab, anchor=south] at (2.586,1.580) {.922};
 \end{scope}
 
 % Shared x-axis label
@@ -364,43 +364,49 @@ are chosen on 500 held-out COCO val2017 images.
 
 \begin{table*}[t]
 \centering\small\setlength{\tabcolsep}{8pt}
-\caption{F1$_{.5}$ across four test sets and COCO latency (one L40S). Moondream is
-prompted with present ground-truth classes, while YOLO and Slots run unprompted.}
+\caption{F1$_{.5}$ across four test sets and COCO latency (one L40S). Moondream and
+OWLv2 are prompted with present ground-truth classes, while YOLO, RF-DETR and Slots run
+unprompted.}
 \label{tab:main}
 \begin{tabular}{@{}lccccr@{}}
 \toprule
 Model & COCO & VOC & COCO-O & Generated & s/img \\
 \midrule
-Moondream 2 \texttt{detect} & .586 & .851 & .773 & .641 & .220 \\
-Moondream 3.1 & .700 & .857 & \textbf{.781} & \textbf{.795} & .208 \\
-YOLO11n & .612 & .770 & .410 & .582 & \textbf{.008} \\
-YOLO11x & .715 & .838 & .520 & .734 & .018 \\
+Moondream 2 \texttt{detect} & .594 & .850 & .773 & .641 & .217 \\
+Moondream 3.1 & .684 & \textbf{.862} & \textbf{.781} & .795 & .204 \\
+OWLv2-L & .489 & .643 & .616 & .689 & .461 \\
+YOLO11n & .606 & .771 & .410 & .582 & \textbf{.012} \\
+YOLO11x & .721 & .843 & .520 & .734 & .018 \\
+RF-DETR-M & \textbf{.731} & .855 & .543 & .766 & .013 \\
 \midrule
-\rowcolor{rowtint} Slots, rank 64 & .705 & .840 & .765 & .779 & .091 \\
-\rowcolor{rowtint} Slots, rank 64, with tiles & .714 & .841 & .773 & \textbf{.796} & .226 \\
-\rowcolor{rowtint} Slots, rank 128 & .707 & \textbf{.858} & .772 & .786 & .091 \\
-\rowcolor{rowtint} Slots, rank 128, with tiles & \textbf{.718} & .844 & .775 & .791 & .229 \\
+\rowcolor{rowtint} Slots, rank 64 & .693 & .843 & .765 & .779 & .094 \\
+\rowcolor{rowtint} Slots, rank 64, with tiles & .706 & .844 & .773 & \textbf{.796} & .224 \\
+\rowcolor{rowtint} Slots, rank 128 & .696 & .857 & .772 & .786 & .090 \\
+\rowcolor{rowtint} Slots, rank 128, with tiles & .711 & .849 & .775 & .791 & .223 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
 \section{Experiments}
-We compare against Moondream~2, Moondream~3.1 (9.3B), and YOLO11n/x~\citep{yolo11}
-(2.6M/57M) on four test sets: 500 COCO val2017 images, 1{,}000 Pascal VOC 2007 test
-images (zero tuning), COCO-O~\citep{mao2023cocoo} (6{,}782 OOD sketches, cartoons,
+We compare against Moondream~2, Moondream~3.1 (9.3B), the open-vocabulary
+OWLv2~\citep{minderer2023owlv2}, and the COCO-trained detectors YOLO11n/x~\citep{yolo11}
+(2.6M/57M) and RF-DETR~\citep{robinson2026rfdetr} on four test sets: the 4{,}452 COCO
+val2017 images outside our tuning split, the full Pascal VOC 2007 test set (4{,}952
+images, zero tuning), COCO-O~\citep{mao2023cocoo} (6{,}782 OOD sketches, cartoons,
 paintings, tattoos, and bad-weather photos), and \emph{Generated} (3{,}950 unseen
 text-to-image samples across 88 styles labelled by the teacher). All scores are F1 at
 IoU 0.5 on one L40S GPU.
 
-Rank-128 slots tie Moondream~3.1 on COCO and VOC within the $\sim$1.5-point
-paired-bootstrap noise and gain 12 points over base Moondream~2 (Table~\ref{tab:main}).
+Rank-128 slots tie Moondream~3.1 on COCO and VOC: paired over the same images they
+are 1.2 points ahead on COCO (95\% interval 0.0 to 2.4) and 0.5 behind on VOC ($-1.0$ to
+0.0). They gain 10 points over base Moondream~2 (Table~\ref{tab:main}).
 Because each slot outputs a confidence score, we can trade precision against recall via
 the score threshold (Fig.~\ref{fig:pr}), whereas Moondream outputs a single operating
 point. At the chosen threshold, slots have higher precision and lower recall
 (Fig.~\ref{fig:speed}, Table~\ref{tab:coco}): most misses are smaller than one feature-grid cell (sub-cell
-recall 0.20 vs.\ 0.36). Adding $2\times2$ tiles closes that gap on COCO (0.37), though
-not on VOC where objects are larger. Since rank 128 matches rank 64 in speed and adds 1.8
-points on VOC, we use rank 128 below.
+recall 0.20 vs.\ 0.36 on a 500-image sample). Adding $2\times2$ tiles closes that gap on
+COCO (0.37), though not on VOC where objects are larger. Since rank 128 matches rank 64 in
+speed and adds 1.4 points on VOC, we use rank 128 below.
 
 Filling the slots takes only 0.016\,s, with the frozen vision encoder taking the rest.
 Because one pass covers every class, runtime stays flat at 0.082\,s even when querying
@@ -408,11 +414,16 @@ all 80 COCO categories, whereas Moondream~2 scales to 1.52\,s and Moondream~3.1 
 2.67\,s—and prompting Moondream for every class triggers false positives on 71\% of
 absent categories.
 
-On COCO itself, YOLO11x matches slots in a fifth of the time. If images look like COCO
-and only COCO categories matter, a dedicated detector is the better choice. That flips
-under distribution shift. On COCO-O, YOLO11x loses a quarter of its F1 because it finds
-roughly half as many objects, while slots stay within a point of Moondream~3.1
-(Table~\ref{tab:main}). The head keeps the general visual understanding of the VLM it is
+On COCO itself, dedicated detectors win: YOLO11x and RF-DETR score 2.5 and 3.5 points
+above slots in a fifth of the time or less, and under COCO's AP, which rewards a long
+ranked list, the gap is wider (Table~\ref{tab:coco}). If images look like COCO and only
+COCO categories matter, a dedicated detector is the better choice. That flips under
+distribution shift. On COCO-O, YOLO11x and RF-DETR each lose a quarter of their F1 because
+they find roughly half as many objects, while slots stay within a point of Moondream~3.1
+(Table~\ref{tab:main}). OWLv2 holds up better there than the closed-set detectors but
+trails slots on every test set at five times the latency. On Generated, whose labels come
+from our teacher, the ranking is the same under two other labellers
+(Table~\ref{tab:labellers}). The head keeps the general visual understanding of the VLM it is
 built on, and adding teacher-labelled data pushes its precision-recall curve closer to
 Moondream~3.1 (Fig.~\ref{fig:pr}).
 
@@ -437,8 +448,7 @@ expressions~\citep{yu2016refcoco} remains untested. Without tiling, the head als
 more small objects than Moondream~3.1, because the vision encoder's $27\times27$ grid
 limits spatial resolution. Finally, on the evaluation side, both Moondream~2 and
 Moondream~3.1 have likely seen COCO during pretraining, making Pascal VOC and COCO-O the
-more reliable comparisons. All latency numbers come from one GPU model (L40S), and COCO
-and VOC scores are measured on 500- and 1{,}000-image subsets.
+more reliable comparisons. All latency numbers come from one GPU model (L40S).
 
 \section{Conclusion and Future Work}
 We have demonstrated that a small VLM can perform object detection in a single forward
@@ -512,19 +522,47 @@ bit-identical with, eager PyTorch).
 \section{Detailed Metrics: COCO and Video}
 
 \begin{table}[h]
-\centering\small\setlength{\tabcolsep}{7pt}
-\caption{Precision, recall, F1$_{.5}$, F1$_{.75}$, and sub-cell recall on COCO val2017.}
+\centering\small\setlength{\tabcolsep}{6pt}
+\caption{COCO val2017 (4{,}452 images): precision, recall, F1$_{.5}$ with a 95\%
+bootstrap interval over images, F1$_{.75}$, and COCO AP with every category asked of
+every image. Moondream gives no confidences, so it has no AP.}
 \label{tab:coco}
-\begin{tabular}{@{}lccccc@{}}
+\begin{tabular}{@{}lccccccc@{}}
 \toprule
-Model & Precision & Recall & F1$_{.5}$ & F1$_{.75}$ & Recall $<$1 cell \\
+Model & Precision & Recall & F1$_{.5}$ & 95\% interval & F1$_{.75}$ & AP$_{.5}$ & AP \\
 \midrule
-Moondream 2 \texttt{detect} & .501 & .706 & .586 & .450 & -- \\
-Moondream 3.1 & .682 & \textbf{.719} & .700 & .560 & .36 \\
-\rowcolor{rowtint} Slots, rank 64 & .779 & .644 & .705 & .555 & .23 \\
-\rowcolor{rowtint} Slots, rank 64, with tiles & .763 & .670 & .714 & \textbf{.589} & .33 \\
-\rowcolor{rowtint} Slots, rank 128 & \textbf{.811} & .626 & .707 & .566 & .20 \\
-\rowcolor{rowtint} Slots, rank 128, with tiles & .743 & .695 & \textbf{.718} & .586 & \textbf{.37} \\
+Moondream 2 \texttt{detect} & .518 & .695 & .594 & .571--.616 & .448 & -- & -- \\
+Moondream 3.1 & .663 & \textbf{.707} & .684 & .669--.699 & .541 & -- & -- \\
+YOLO11n & .706 & .530 & .606 & .598--.613 & .495 & .529 & .378 \\
+YOLO11x & .797 & .658 & .721 & .714--.728 & .632 & .692 & .527 \\
+RF-DETR-M & .792 & .679 & \textbf{.731} & .724--.738 & .617 & \textbf{.724} & \textbf{.538} \\
+\rowcolor{rowtint} Slots, rank 64 & .772 & .630 & .693 & .685--.701 & .542 & .631 & .448 \\
+\rowcolor{rowtint} Slots, rank 64, with tiles & .763 & .657 & .706 & .698--.713 & .585 & -- & -- \\
+\rowcolor{rowtint} Slots, rank 128 & \textbf{.801} & .616 & .696 & .688--.704 & .550 & .629 & .445 \\
+\rowcolor{rowtint} Slots, rank 128, with tiles & .739 & .686 & .711 & .703--.719 & .575 & .675 & .480 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering\small\setlength{\tabcolsep}{7pt}
+\caption{F1$_{.5}$ on the 1{,}725 Generated images that three models labelled, scored
+against each labeller and against the boxes at least two of them agree on.}
+\label{tab:labellers}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Model & Gemini 4 Carbon & Claude Opus 5.5 & GPT-6.2 Sol & Agreed \\
+\midrule
+Moondream 2 \texttt{detect} & .661 & .545 & .537 & .648 \\
+Moondream 3.1 & \textbf{.805} & .663 & .639 & .785 \\
+OWLv2-L & .691 & .553 & .562 & .654 \\
+YOLO11n & .585 & .528 & .473 & .596 \\
+YOLO11x & .741 & .651 & .595 & .749 \\
+RF-DETR-M & .774 & \textbf{.678} & .624 & .779 \\
+\rowcolor{rowtint} Slots, rank 64 & .782 & .670 & .636 & .785 \\
+\rowcolor{rowtint} Slots, rank 64, with tiles & .795 & .653 & \textbf{.657} & .782 \\
+\rowcolor{rowtint} Slots, rank 128 & .789 & .674 & .644 & \textbf{.792} \\
+\rowcolor{rowtint} Slots, rank 128, with tiles & .792 & .646 & .654 & .773 \\
 \bottomrule
 \end{tabular}
 \end{table}

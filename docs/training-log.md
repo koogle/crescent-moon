@@ -934,6 +934,74 @@ on the whole VOC 2007 test set (4,952), each model at the threshold tuned on the
 - YOLO11x is 2.5 points ahead of the rank-128 head on COCO (0.721 against 0.696), where
   on the 500 images it was 0.8 ahead.
 
+### Two more reference detectors, and COCO AP
+
+`rf_detr.RfDetrDetector` (RF-DETR medium, `rfdetr` 1.12.1, trained on COCO) and
+`owl.OwlDetector` (OWLv2 large ensemble through Transformers, prompted with the
+categories present like Moondream, boxes of one phrase reduced by non-maximum suppression
+at IoU 0.5) run through the same harness (`modal_app.py::baseline`, configs
+`full-rf-detr`, `full-*-owl`, `coco-o-*`, `generated-wide-*`). Thresholds from the 500
+tuning images: 0.37 and 0.15. F1 at IoU 0.5, seconds per COCO image on an L40S:
+
+| Model | COCO (4,452) | VOC (4,952) | COCO-O | Generated | s/image |
+|---|---|---|---|---|---|
+| RF-DETR-M | 0.731 | 0.855 | 0.543 | 0.766 | 0.013 |
+| OWLv2-L | 0.489 | 0.643 | 0.616 | 0.689 | 0.461 |
+| YOLO11x, for reference | 0.721 | 0.843 | 0.520 | 0.734 | 0.018 |
+| Rank 128, full image, for reference | 0.696 | 0.857 | 0.772 | 0.786 | 0.090 |
+
+RF-DETR is the most accurate model on COCO and, like YOLO11x, loses a quarter of its F1
+on COCO-O (per domain: sketch 0.338, tattoo 0.308, cartoon 0.435, handmade 0.495,
+painting 0.649, weather 0.782). OWLv2 keeps more of its score there than the closed-set
+detectors but its precision is low at one threshold for all categories (0.435 on COCO).
+Its numbers are not checked against a published COCO result.
+
+For COCO's AP every category is asked of every image (`"categories": 80`; runs
+`full-coco-all-*`, the slot heads recorded at threshold 0.02), and
+`metrics.ranked_ap(..., absent=True)` counts boxes for absent categories as misses:
+
+| Model | AP, IoU 0.5 | AP, IoU 0.5 to 0.95 | Published |
+|---|---|---|---|
+| YOLO11n | 0.529 | 0.378 | 0.395 |
+| YOLO11x | 0.692 | 0.527 | 0.547 |
+| RF-DETR-M | 0.724 | 0.538 | 0.547 |
+| Rank 64, full image | 0.631 | 0.448 | |
+| Rank 128, full image | 0.629 | 0.445 | |
+| Rank 128, tiles | 0.675 | 0.480 | |
+
+The reference detectors land 1 to 2 points under their published AP on these 4,452
+images, which checks the computation. The slot heads are 5 to 8 points under YOLO11x:
+48 slots trained towards precision leave a short ranked list (recall 0.62 at the tuned
+threshold).
+
+### The generated set under three labellers
+
+`configs/teacher-generated-wide-opus.json` and `-gpt.json` label the same generated
+images with Claude Opus 5.5 (2,320 images, 28 USD) and GPT-6.2 Sol (2,195 images,
+11.92 USD; the best of five further models on 50 pilot images,
+`configs/teacher-pilot-second.json`: F1 0.650 against Kimi K3.1 Pro 0.650, Tencent HY4
+0.595, Meta Muse Spark 0.436, Qwen4 Max 0.396). Both runs ended when the OpenRouter
+account refused further requests for lack of credit. `scripts/labeller_agreement.py`
+rescores the stored predictions on the 1,725 images all three labelled, against each
+labeller's boxes for the categories asked and against the boxes at least two agree on:
+
+| Model | Carbon | Opus | GPT | Agreed |
+|---|---|---|---|---|
+| Moondream 2 | 0.661 | 0.545 | 0.537 | 0.648 |
+| Moondream 3.1 | 0.805 | 0.663 | 0.639 | 0.785 |
+| OWLv2-L | 0.691 | 0.553 | 0.562 | 0.654 |
+| YOLO11n | 0.585 | 0.528 | 0.473 | 0.596 |
+| YOLO11x | 0.741 | 0.651 | 0.595 | 0.749 |
+| RF-DETR-M | 0.774 | 0.678 | 0.624 | 0.779 |
+| Rank 64, full image | 0.782 | 0.670 | 0.636 | 0.785 |
+| Rank 64, tiles | 0.795 | 0.653 | 0.657 | 0.782 |
+| Rank 128, full image | 0.789 | 0.674 | 0.644 | 0.792 |
+| Rank 128, tiles | 0.792 | 0.646 | 0.654 | 0.773 |
+
+The slot heads are level with Moondream 3.1 and ahead of YOLO11x under every truth, so
+the result does not rest on Carbon's labels; Carbon's own truth favours Moondream 3.1
+most. RF-DETR is level with the slot heads on these images.
+
 ### The 4-bit head against YOLO in a browser
 
 `web/tests/yolo.test.js` runs YOLO's ONNX files (640 x 640 input, exported by

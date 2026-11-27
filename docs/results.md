@@ -71,6 +71,18 @@ head takes 0.75 s per frame on an L4 and 2.2 s on an Apple GPU, YOLO11n 0.031 s 
 0.033 s. Log: "Shifted images: COCO-O", "Generated images labelled by the teacher", "The
 4-bit head against YOLO in a browser".
 
+## The full test sets, more baselines, AP and other labellers
+
+On all 4,452 COCO val images outside the tuning split and the whole VOC test set, the
+rank-128 head scores 0.696 and 0.857 against Moondream 3.1's 0.684 and 0.862 (paired
+differences +1.2 and -0.5 points, both intervals touching zero). YOLO11x (0.721) and
+RF-DETR-M (0.731) are ahead on COCO and fall to 0.520 and 0.543 on COCO-O, where the head
+holds 0.772; OWLv2-L scores 0.489 on COCO and 0.616 on COCO-O. COCO AP with every
+category asked: rank 128 0.445 (0.480 with tiles), YOLO11x 0.527, RF-DETR-M 0.538. On
+1,725 generated images labelled by three models, the head is level with Moondream 3.1
+and ahead of YOLO11x under each labeller. Log: "The whole of COCO val and VOC test", "Two
+more reference detectors, and COCO AP", "The generated set under three labellers".
+
 ## Video (MOT17, every third frame of two sequences)
 
 | Model | Precision | Recall | F1 |
