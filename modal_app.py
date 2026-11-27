@@ -82,6 +82,19 @@ photon_image = (
     .env({"HF_HOME": "/runs/hf-cache"})
     .add_local_dir(PACKAGE, "/root/crescent_moon")
 )
+# RF-DETR and OWLv2 bring their own PyTorch, as Ultralytics does.
+baseline_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .apt_install("libgl1", "libglib2.0-0")
+    .pip_install(
+        "rfdetr==1.12.1",
+        "transformers==4.53.3",
+        "torchvision",
+        *[p for p in PACKAGES if p.startswith(("scipy", "pillow", "pyarrow", "huggingface"))],
+    )
+    .env({"HF_HOME": "/runs/hf-cache"})
+    .add_local_dir(PACKAGE, "/root/crescent_moon")
+)
 kernel_image = with_source(modal.Image.from_registry(CUDA_IMAGE, add_python="3.12"))
 # Ultralytics brings its own PyTorch and torchvision; OpenCV needs these system libraries.
 yolo_image = (
@@ -172,6 +185,18 @@ def evaluate_photon(run_id, config, provenance, deadline):
     volumes={"/runs": volume},
 )
 def evaluate_yolo(run_id, config, provenance, deadline):
+    return run_evaluation(run_id, config, provenance, deadline)
+
+
+@app.function(
+    image=baseline_image,
+    gpu="L40S",
+    timeout=LAUNCH_LIMIT_SECONDS,
+    retries=0,
+    max_containers=4,
+    volumes={"/runs": volume},
+)
+def evaluate_baseline(run_id, config, provenance, deadline):
     return run_evaluation(run_id, config, provenance, deadline)
 
 
@@ -500,6 +525,12 @@ def yolo_onnx(names: str = "yolo11n,yolo11x", folder: str = "yolo11"):
 def yolo(run_id: str, config: str = "configs/yolo11n.json"):
     """A closed-set reference detector on the tuning split, COCO and VOC."""
     launch(evaluate_yolo, run_id, config, "summary.json", gpu="L40S")
+
+
+@app.local_entrypoint()
+def baseline(run_id: str, config: str = "configs/full-rf-detr.json"):
+    """A reference detector (RF-DETR, OWLv2) on a config's datasets."""
+    launch(evaluate_baseline, run_id, config, "summary.json", gpu="L40S")
 
 
 @app.local_entrypoint()

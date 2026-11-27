@@ -273,6 +273,14 @@ def make_detector(model, device, **extra):
         from crescent_moon.yolo import YoloDetector
 
         return YoloDetector(**model, device=device)
+    if adapter == "rf-detr":
+        from crescent_moon.rf_detr import RfDetrDetector
+
+        return RfDetrDetector(**model, device=device)
+    if adapter == "owl":
+        from crescent_moon.owl import OwlDetector
+
+        return OwlDetector(**model, device=device)
     raise ValueError(f"Unknown adapter {adapter!r}")
 
 

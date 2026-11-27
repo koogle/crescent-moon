@@ -216,15 +216,17 @@ def agreement(reference, records):
     }
 
 
-def ranked_curve(records, threshold=0.5):
+def ranked_curve(records, threshold=0.5, absent=False):
     """Precision-recall curve over boxes ranked by recorded confidence.
 
-    Uses phrases that name something in the image. Within each phrase, boxes are taken
+    Uses phrases that name something in the image; with `absent`, also the boxes given
+    for phrases that name nothing in it, which are all misses, as when every category is
+    asked of every image. Within each phrase, boxes are taken
     in descending confidence and each takes the unmatched truth box it overlaps most, as
     in COCO's evaluation. Returns (precision, recall) arrays over the pooled ranking,
     and the per-phrase pieces as {phrase: (scores, hits, truth count)}.
     """
-    present = [r for r in records if r["kind"] != "absent"]
+    present = [r for r in records if absent or r["kind"] != "absent"]
     by_phrase = defaultdict(lambda: [[], [], 0])
     for r in present:
         order = np.argsort(-np.asarray(r["scores"], dtype=np.float64), kind="stable")
@@ -259,9 +261,9 @@ def area(precision, recall):
     return float((steps * envelope).sum())
 
 
-def ranked_ap(records, threshold=0.5):
+def ranked_ap(records, threshold=0.5, absent=False):
     """Pooled area under the precision-recall curve, and its mean over categories."""
-    precision, recall, phrases = ranked_curve(records, threshold)
+    precision, recall, phrases = ranked_curve(records, threshold, absent)
     per_category = []
     for scores, hits, total in phrases.values():
         if not total:
@@ -289,3 +291,30 @@ def best_threshold(records, dataset, grid=None):
         )
     f1 = [summarize(above(records, t))[dataset]["detection"]["iou_0.5"]["f1"] for t in grid]
     return float(grid[int(np.argmax(f1))])
+
+
+def interval(records, repeats=2000, seed=0, threshold=0.5, level=0.95):
+    """Bootstrap interval of micro precision, recall and F1 at one IoU, resampling images.
+
+    Returns {"precision"|"recall"|"f1": [low, high]} at `level`, with boxes for phrases
+    that name nothing in the image counted as false positives, as `detection_summary` does.
+    """
+    counts = defaultdict(lambda: np.zeros(3))
+    for r in records:
+        found = len(match(r["predicted"], r["boxes"], threshold)) if r["kind"] != "absent" else 0
+        wrong = len(r["predicted"]) - found if r["kind"] == "absent" or r["exhaustive"] else 0
+        counts[(r["dataset"], r["image_id"])] += (found, wrong, len(r["boxes"]) - found)
+    table = np.stack(list(counts.values()))
+    rng = np.random.default_rng(seed)
+    draws = rng.integers(0, len(table), size=(repeats, len(table)))
+    tp, fp, fn = table[draws].sum(axis=1).T
+    with np.errstate(invalid="ignore", divide="ignore"):
+        scores = {
+            "precision": tp / (tp + fp),
+            "recall": tp / (tp + fn),
+            "f1": 2 * tp / (2 * tp + fp + fn),
+        }
+    tail = (1 - level) / 2 * 100
+    return {
+        k: [float(x) for x in np.nanpercentile(v, [tail, 100 - tail])] for k, v in scores.items()
+    }

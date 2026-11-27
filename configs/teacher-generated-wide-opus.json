@@ -1,0 +1,14 @@
+{
+  "manifest": "artifacts/generated-wide/manifest.jsonl",
+  "workers": 4,
+  "models": {
+    "anthropic/claude-opus-5.5": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    }
+  }
+}
