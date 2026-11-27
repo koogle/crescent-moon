@@ -87,11 +87,155 @@
 \vspace{0.6em}
 
 \begin{center}
-\includegraphics[width=0.90\textwidth]{speed.jpg}
-\captionof{figure}{F1$_{.5}$ vs.\ latency per image on COCO val2017 and Pascal VOC 2007 (one L40S).}
+\definecolor{cMD2}{HTML}{2A78D6}
+\definecolor{cMD3}{HTML}{EDA100}
+\definecolor{cSlot}{HTML}{E34948}
+\definecolor{cGrid}{HTML}{E5E7EB}
+\definecolor{cSurf}{HTML}{FCFCFB}
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily, x=1cm, y=1cm,
+  gridl/.style={cGrid, line width=0.45pt},
+  ax/.style={black!35, line width=0.55pt},
+  md2/.style={cMD2, fill=cMD2, draw=white, line width=0.5pt},
+  md3/.style={cMD3, fill=cMD3, draw=white, line width=0.5pt},
+  sfast/.style={cSlot, fill=cSlot, draw=white, line width=0.5pt},
+  stile/.style={cSlot, fill=white, draw=cSlot, line width=1.1pt},
+  ptlab/.style={font=\tiny\sffamily, text=ink},
+]
+% Shared legend centered above the 4 panels
+\node[anchor=center] at (7.6, 3.05) {%
+  \tikz[baseline=-0.5ex]{\fill[cMD2] (0,0.09)--(0.09,0)--(0,-0.09)--(-0.09,0)--cycle;}\;Moondream 2\qquad
+  \tikz[baseline=-0.5ex]{\fill[cMD3] (0,0.09)--(0.09,0)--(0,-0.09)--(-0.09,0)--cycle;}\;Moondream 3.1\qquad
+  \tikz[baseline=-0.5ex]{\fill[cSlot] (0,0) circle (0.085);}\;Slots, fast\qquad
+  \tikz[baseline=-0.5ex]{\draw[cSlot, fill=white, line width=1pt] (0,0) circle (0.08);}\;Slots, tiled (2$\times$2)%
+};
+
+% Helper macro: draw one panel at x-offset #1
+% Panel width = 3.2cm (x: 0..0.25s => 12.8 cm/s), height = 2.1cm
+% Panel 1: COCO Precision (y: 0.45..0.85)
+\begin{scope}[shift={(0,0)}]
+  \fill[cSurf] (0,0) rectangle (3.2,2.1);
+  \foreach \y/\yl in {0/0.45, 0.525/0.55, 1.05/0.65, 1.575/0.75, 2.1/0.85} {
+    \draw[gridl] (0,\y)--(3.2,\y);
+    \node[anchor=east, font=\tiny\sffamily, text=muted] at (-0.05,\y) {\yl};
+  }
+  \foreach \x/\xl in {0/0, 1.28/0.1, 2.56/0.2} {
+    \draw[gridl] (\x,0)--(\x,2.1);
+    \node[anchor=north, font=\tiny\sffamily, text=muted] at (\x,-0.04) {\xl};
+  }
+  \draw[ax] (0,0)--(3.2,0); \draw[ax] (0,0)--(0,2.1);
+  \node[anchor=south west, font=\scriptsize\sffamily\bfseries, text=ink] at (0,2.18) {COCO Precision};
+  % Points: x = s*12.8, y = (val-0.45)/0.40 * 2.1
+  % MD2: (0.220, 0.501) -> (2.816, 0.268)
+  % MD3: (0.208, 0.682) -> (2.662, 1.218)
+  % Fast: (0.091, 0.811) -> (1.165, 1.895)
+  % Tiled: (0.229, 0.743) -> (2.931, 1.538)
+  \draw[cSlot!55, densely dashed, line width=0.7pt] (1.165,1.895)--(2.931,1.538);
+  \path[md2] (2.816,0.268) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=east] at (2.68,0.27) {.501};
+  \path[md3] (2.662,1.218) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=east] at (2.52,1.22) {.682};
+  \draw[sfast] (1.165,1.895) circle (0.09);
+  \node[ptlab, anchor=west] at (1.28,1.92) {.811};
+  \draw[stile] (2.931,1.538) circle (0.085);
+  \node[ptlab, anchor=south east] at (2.90,1.60) {.743};
+\end{scope}
+
+% Panel 2: COCO Recall (y: 0.55..0.75)
+\begin{scope}[shift={(3.95,0)}]
+  \fill[cSurf] (0,0) rectangle (3.2,2.1);
+  \foreach \y/\yl in {0/0.55, 0.525/0.60, 1.05/0.65, 1.575/0.70, 2.1/0.75} {
+    \draw[gridl] (0,\y)--(3.2,\y);
+    \node[anchor=east, font=\tiny\sffamily, text=muted] at (-0.05,\y) {\yl};
+  }
+  \foreach \x/\xl in {0/0, 1.28/0.1, 2.56/0.2} {
+    \draw[gridl] (\x,0)--(\x,2.1);
+    \node[anchor=north, font=\tiny\sffamily, text=muted] at (\x,-0.04) {\xl};
+  }
+  \draw[ax] (0,0)--(3.2,0); \draw[ax] (0,0)--(0,2.1);
+  \node[anchor=south west, font=\scriptsize\sffamily\bfseries, text=ink] at (0,2.18) {COCO Recall};
+  % y = (val-0.55)/0.20 * 2.1
+  % MD2: (0.220, 0.706) -> (2.816, 1.638)
+  % MD3: (0.208, 0.719) -> (2.662, 1.775)
+  % Fast: (0.091, 0.626) -> (1.165, 0.798)
+  % Tiled: (0.229, 0.695) -> (2.931, 1.523)
+  \draw[cSlot!55, densely dashed, line width=0.7pt] (1.165,0.798)--(2.931,1.523);
+  \path[md2] (2.816,1.638) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=east] at (2.68,1.58) {.706};
+  \path[md3] (2.662,1.775) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=south east] at (2.62,1.83) {.719};
+  \draw[sfast] (1.165,0.798) circle (0.09);
+  \node[ptlab, anchor=north] at (1.165,0.68) {.626};
+  \draw[stile] (2.931,1.523) circle (0.085);
+  \node[ptlab, anchor=north] at (2.931,1.40) {.695};
+\end{scope}
+
+% Panel 3: VOC Precision (y: 0.74..0.86)
+\begin{scope}[shift={(8.1,0)}]
+  \fill[cSurf] (0,0) rectangle (3.2,2.1);
+  \foreach \y/\yl in {0/0.74, 0.7/0.78, 1.4/0.82, 2.1/0.86} {
+    \draw[gridl] (0,\y)--(3.2,\y);
+    \node[anchor=east, font=\tiny\sffamily, text=muted] at (-0.05,\y) {\yl};
+  }
+  \foreach \x/\xl in {0/0, 1.28/0.1, 2.56/0.2} {
+    \draw[gridl] (\x,0)--(\x,2.1);
+    \node[anchor=north, font=\tiny\sffamily, text=muted] at (\x,-0.04) {\xl};
+  }
+  \draw[ax] (0,0)--(3.2,0); \draw[ax] (0,0)--(0,2.1);
+  \node[anchor=south west, font=\scriptsize\sffamily\bfseries, text=ink] at (0,2.18) {VOC Precision};
+  % y = (val-0.74)/0.12 * 2.1
+  % MD2: (0.088, 0.787) -> (1.126, 0.823)
+  % MD3: (0.095, 0.806) -> (1.216, 1.155)
+  % Fast: (0.063, 0.821) -> (0.806, 1.418)
+  % Tiled: (0.200, 0.778) -> (2.560, 0.665)
+  \draw[cSlot!55, densely dashed, line width=0.7pt] (0.806,1.418)--(2.560,0.665);
+  \path[md2] (1.126,0.823) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=north] at (1.126,0.70) {.787};
+  \path[md3] (1.216,1.155) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=west] at (1.33,1.20) {.806};
+  \draw[sfast] (0.806,1.418) circle (0.09);
+  \node[ptlab, anchor=south] at (0.806,1.53) {.821};
+  \draw[stile] (2.560,0.665) circle (0.085);
+  \node[ptlab, anchor=north] at (2.560,0.54) {.778};
+\end{scope}
+
+% Panel 4: VOC Recall (y: 0.88..0.94)
+\begin{scope}[shift={(12.05,0)}]
+  \fill[cSurf] (0,0) rectangle (3.2,2.1);
+  \foreach \y/\yl in {0/0.88, 0.7/0.90, 1.4/0.92, 2.1/0.94} {
+    \draw[gridl] (0,\y)--(3.2,\y);
+    \node[anchor=east, font=\tiny\sffamily, text=muted] at (-0.05,\y) {\yl};
+  }
+  \foreach \x/\xl in {0/0, 1.28/0.1, 2.56/0.2} {
+    \draw[gridl] (\x,0)--(\x,2.1);
+    \node[anchor=north, font=\tiny\sffamily, text=muted] at (\x,-0.04) {\xl};
+  }
+  \draw[ax] (0,0)--(3.2,0); \draw[ax] (0,0)--(0,2.1);
+  \node[anchor=south west, font=\scriptsize\sffamily\bfseries, text=ink] at (0,2.18) {VOC Recall};
+  % y = (val-0.88)/0.06 * 2.1
+  % MD2: (0.088, 0.927) -> (1.126, 1.645)
+  % MD3: (0.095, 0.915) -> (1.216, 1.225)
+  % Fast: (0.063, 0.898) -> (0.806, 0.630)
+  % Tiled: (0.200, 0.922) -> (2.560, 1.470)
+  \draw[cSlot!55, densely dashed, line width=0.7pt] (0.806,0.630)--(2.560,1.470);
+  \path[md2] (1.126,1.645) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=south] at (1.126,1.76) {.927};
+  \path[md3] (1.216,1.225) +(0,0.095)--+(0.095,0)--+(0,-0.095)--+(-0.095,0)--cycle;
+  \node[ptlab, anchor=west] at (1.33,1.24) {.915};
+  \draw[sfast] (0.806,0.630) circle (0.09);
+  \node[ptlab, anchor=north] at (0.806,0.51) {.898};
+  \draw[stile] (2.560,1.470) circle (0.085);
+  \node[ptlab, anchor=south] at (2.560,1.59) {.922};
+\end{scope}
+
+% Shared x-axis label
+\node[font=\scriptsize\sffamily, text=muted] at (7.6, -0.45) {Seconds per image on one L40S};
+\end{tikzpicture}}
+\captionof{figure}{Precision and recall at IoU 0.5 against latency per image on COCO and Pascal VOC 2007.}
 \label{fig:speed}
 \end{center}
-\vspace{0.4em}
+\vspace{0.3em}
 }]
 
 \section{Introduction}
@@ -123,44 +267,63 @@ COCO vocabulary. The aim is reliable rather than exhaustive detection.
 \centering
 \definecolor{slotA}{HTML}{2A78D6}\definecolor{slotB}{HTML}{EB6834}
 \definecolor{slotC}{HTML}{1BAF7A}\definecolor{slotD}{HTML}{6250D6}
-\definecolor{frozenfill}{HTML}{EEF3FA}\definecolor{trained}{HTML}{E8833A}
+\definecolor{frozenfill}{HTML}{F2F5FA}\definecolor{trained}{HTML}{E8833A}
 \resizebox{0.96\textwidth}{!}{%
 \begin{tikzpicture}[
   font=\footnotesize\sffamily, x=1cm, y=1cm,
-  tok/.style={minimum size=0.25cm, inner sep=0, draw=black!40, fill=black!10},
-  empty/.style={minimum size=0.25cm, inner sep=0, draw=black!45, dashed, fill=white},
-  full/.style={minimum size=0.25cm, inner sep=0, draw=#1!75!black, fill=#1!85},
-  none/.style={minimum size=0.25cm, inner sep=0, draw=black!25, fill=black!4},
-  lab/.style={font=\scriptsize\sffamily, text=black!65, align=center},
+  tok/.style={minimum size=0.25cm, inner sep=0, rounded corners=1.2pt, draw=black!35, fill=black!14},
+  empty/.style={minimum size=0.25cm, inner sep=0, rounded corners=1.2pt, draw=black!28, fill=white},
+  full/.style={minimum size=0.25cm, inner sep=0, rounded corners=1.2pt, draw=#1!80!black, fill=#1!85},
+  none/.style={minimum size=0.25cm, inner sep=0, rounded corners=1.2pt, draw=black!20, fill=black!5},
+  slotbox/.style={rounded corners=2.2pt, draw=black!22, fill=black!2, line width=0.4pt},
+  lab/.style={font=\scriptsize\sffamily, text=black!60, align=center},
   head/.style={font=\footnotesize\sffamily\bfseries, align=center},
-  arr/.style={-{Latex[length=1.8mm]}, black!60, thick},
+  arr/.style={-{Latex[length=1.8mm]}, black!55, thick},
 ]
+% Image
 \node[inner sep=0] (in) at (0,0) {\includegraphics[height=2.3cm]{architecture-input.jpg}};
 \node[head] at (0,1.58) {Image};
-\node[head] at (3.75,1.58) {Input};
-\foreach \i in {0,...,5} \node[tok] at (2.6+\i*0.3,0.92) {};
-\node[lab, anchor=west] at (4.3,0.92) {image tokens};
-\foreach \r in {0,...,3} \foreach \i in {0,...,5} \node[empty] at (2.6+\i*0.3,0.38-\r*0.35) {};
-\node[lab] at (3.35,-1.08) {48 empty slots};
-\draw[arr] (1.95,0) -- (2.3,0);
-\draw[draw=blue!35!black!45, fill=frozenfill, rounded corners=3pt] (6.0,-1.16) rectangle (8.9,1.16);
-\node[align=center] at (7.45,0.40) {Moondream 2\\[1pt]\scriptsize frozen};
-\draw[draw=trained, fill=trained!22, rounded corners=1.5pt] (6.2,-0.95) rectangle (8.7,-0.36);
-\node[font=\scriptsize\sffamily, text=trained!65!black, align=center] at (7.45,-0.655) {adapters at the slots\\trained};
-\node[head] at (7.45,1.58) {One forward pass};
-\draw[arr] (4.5,0) -- (6.0,0);
-\draw[arr] (8.9,0) -- (9.35,0);
-\node[head] at (10.9,1.58) {Output};
-\foreach \c/\t/\r in {slotA/person/0,slotB/horse/1,slotC/person/2}
-  { \foreach \i in {0,...,5} \node[full=\c] at (9.65+\i*0.3,0.74-\r*0.35) {};
-    \node[anchor=west, font=\scriptsize\sffamily] at (11.5,0.74-\r*0.35) {\t}; }
-\foreach \i in {0,...,5} \node[none] at (9.65+\i*0.3,-0.31) {};
-\node[anchor=west, font=\scriptsize\sffamily, text=black!55] at (11.5,-0.31) {nothing};
-\node[font=\scriptsize] at (10.4,-0.66) {$\vdots$};
-\node[lab] at (10.4,-1.12) {x \,y \,size \,+\, label};
-\node[inner sep=0] (out) at (14.6,0) {\includegraphics[height=2.3cm]{architecture-output.jpg}};
-\node[head] at (14.6,1.58) {Detections};
-\draw[arr] (12.5,0) -- (out.west);
+\draw[arr] (1.92,0) -- (2.35,0);
+
+% Input sequence: image tokens + 48 empty slots
+\node[head] at (3.53,1.58) {Input};
+\node[lab] at (3.53,1.20) {730 image tokens};
+\foreach \i in {0,...,5} \node[tok] at (2.73+\i*0.32,0.88) {};
+\foreach \r in {0,...,2} {
+  \draw[slotbox] (2.52,0.52-\r*0.42) rectangle (4.54,0.18-\r*0.42);
+  \foreach \i in {0,1,2} \node[empty] at (2.7+\i*0.30,0.35-\r*0.42) {};
+  \foreach \i in {0,1,2} \node[empty] at (3.76+\i*0.30,0.35-\r*0.42) {};
+}
+\node[font=\scriptsize, text=black!55] at (3.53,-0.80) {$\vdots$};
+\node[lab] at (3.53,-1.14) {48 empty slots};
+
+% Model box
+\draw[arr] (4.72,0) -- (5.75,0);
+\draw[draw=blue!30!black!35, fill=frozenfill, rounded corners=4pt, line width=0.6pt] (5.75,-1.16) rectangle (8.65,1.16);
+\node[align=center] at (7.20,0.40) {Moondream 2\\[1pt]\scriptsize\color{black!60} frozen};
+\draw[draw=trained, fill=trained!18, rounded corners=2pt, line width=0.6pt] (5.95,-0.95) rectangle (8.45,-0.36);
+\node[font=\scriptsize\sffamily, text=trained!70!black, align=center] at (7.20,-0.655) {slot adapters\\trained};
+\node[head] at (7.20,1.58) {One forward pass};
+\draw[arr] (8.65,0) -- (9.35,0);
+
+% Output slots
+\node[head] at (10.75,1.58) {Output};
+\foreach \c/\t/\r in {slotA/person/0,slotB/horse/1,slotC/person/2} {
+  \foreach \i in {0,1,2} \node[full=\c] at (9.65+\i*0.30,0.78-\r*0.38) {};
+  \foreach \i in {0,1,2} \node[full=\c] at (10.71+\i*0.30,0.78-\r*0.38) {};
+  \node[anchor=west, font=\scriptsize\sffamily] at (11.55,0.78-\r*0.38) {\t};
+}
+\foreach \i in {0,1,2} \node[none] at (9.65+\i*0.30,-0.36) {};
+\foreach \i in {0,1,2} \node[none] at (10.71+\i*0.30,-0.36) {};
+\node[anchor=west, font=\scriptsize\sffamily, text=black!50] at (11.55,-0.36) {nothing};
+\node[font=\scriptsize, text=black!55] at (10.48,-0.74) {$\vdots$};
+\node[lab] at (9.95,-1.14) {x\,y\,size};
+\node[lab] at (11.01,-1.14) {label};
+
+% Detections
+\node[inner sep=0] (out) at (15.0,0) {\includegraphics[height=2.3cm]{architecture-output.jpg}};
+\node[head] at (15.0,1.58) {Detections};
+\draw[arr] (12.50,0) -- (13.15,0);
 \end{tikzpicture}}
 \caption{48 empty 6-token slots appended to frozen Moondream~2 image tokens and filled in
 one forward pass.}
@@ -234,18 +397,10 @@ paired-bootstrap noise and gain 12 points over base Moondream~2 (Table~\ref{tab:
 Because each slot outputs a confidence score, we can trade precision against recall via
 the score threshold (Fig.~\ref{fig:pr}), whereas Moondream outputs a single operating
 point. At the chosen threshold, slots have higher precision and lower recall
-(Table~\ref{tab:coco}): most misses are smaller than one feature-grid cell (sub-cell
+(Fig.~\ref{fig:speed}, Table~\ref{tab:coco}): most misses are smaller than one feature-grid cell (sub-cell
 recall 0.20 vs.\ 0.36). Adding $2\times2$ tiles closes that gap on COCO (0.37), though
 not on VOC where objects are larger. Since rank 128 matches rank 64 in speed and adds 1.8
 points on VOC, we use rank 128 below.
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.92\textwidth]{selection-precision-recall.jpg}
-\caption{Precision--recall curves on COCO and Pascal VOC. Dots mark the chosen threshold
-and single points show unthresholded baselines.}
-\label{fig:pr}
-\end{figure*}
 
 Filling the slots takes only 0.016\,s, with the frozen vision encoder taking the rest.
 Because one pass covers every class, runtime stays flat at 0.082\,s even when querying
@@ -305,6 +460,12 @@ refinement may start to matter.
 \clearpage
 \onecolumn
 \appendix
+{\raggedright
+{\Large\sffamily\bfseries Appendix\par}
+\vspace{0.4em}
+{\color{cardborder}\hrule height 0.8pt}
+}
+\vspace{0.8em}
 
 \section{Ablations}
 Table~\ref{tab:ablate} shows each change by itself (\ok{} helped, \eq{} within the
@@ -385,7 +546,15 @@ Moondream 3.1 & .816 & .291 & .429 & .206 \\
 \end{tabular}
 \end{table}
 
-\section{PR Areas and Qualitative Examples}
+\section{PR Curves, Areas, and Qualitative Examples}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.92\textwidth]{selection-precision-recall.jpg}
+\caption{Precision--recall curves on COCO and Pascal VOC. Dots mark the chosen threshold
+and single points show unthresholded baselines.}
+\label{fig:pr}
+\end{figure}
 
 \begin{figure}[h]
 \centering
