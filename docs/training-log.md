@@ -906,6 +906,34 @@ and tattoo loses three (0.769 to 0.739). The generated images are 7% of the trai
 
 The generated images cannot serve as a test set for this head.
 
+### The whole of COCO val and VOC test
+
+`configs/full-*.json` evaluate on every COCO val2017 image with objects outside the 500
+tuning images (4,452; the dataset key `exclude_samples` leaves the tuning split out) and
+on the whole VOC 2007 test set (4,952), each model at the threshold tuned on the 500
+(runs `full-coco-*`, `full-voc-*`, `full-yolo11n`, `full-yolo11x`; an L40S).
+`scripts/score_runs.py` scores them; the interval is a 95% bootstrap over images
+(`metrics.interval`, 2,000 resamples).
+
+| Model | COCO P / R | COCO F1 | 95% interval | F1, IoU 0.75 | s/image | VOC P / R | VOC F1 | 95% interval | s/image |
+|---|---|---|---|---|---|---|---|---|---|
+| Moondream 2 | 0.518 / 0.695 | 0.594 | 0.571 to 0.616 | 0.448 | 0.217 | 0.799 / 0.909 | 0.850 | 0.839 to 0.861 | 0.085 |
+| Moondream 3.1 | 0.663 / 0.707 | 0.684 | 0.669 to 0.699 | 0.541 | 0.204 | 0.821 / 0.907 | 0.862 | 0.855 to 0.869 | 0.096 |
+| YOLO11n | 0.706 / 0.530 | 0.606 | 0.598 to 0.613 | 0.495 | 0.012 | 0.736 / 0.809 | 0.771 | 0.764 to 0.778 | 0.011 |
+| YOLO11x | 0.797 / 0.658 | 0.721 | 0.714 to 0.728 | 0.632 | 0.018 | 0.803 / 0.888 | 0.843 | 0.838 to 0.849 | 0.017 |
+| Rank 64, full image | 0.772 / 0.630 | 0.693 | 0.685 to 0.701 | 0.542 | 0.094 | 0.792 / 0.902 | 0.843 | 0.837 to 0.850 | 0.065 |
+| Rank 64, tiles | 0.763 / 0.657 | 0.706 | 0.698 to 0.713 | 0.585 | 0.224 | 0.785 / 0.913 | 0.844 | 0.838 to 0.851 | 0.196 |
+| Rank 128, full image | 0.801 / 0.616 | 0.696 | 0.688 to 0.704 | 0.550 | 0.090 | 0.824 / 0.892 | 0.857 | 0.851 to 0.863 | 0.050 |
+| Rank 128, tiles | 0.739 / 0.686 | 0.711 | 0.703 to 0.719 | 0.575 | 0.223 | 0.787 / 0.922 | 0.849 | 0.843 to 0.855 | 0.202 |
+
+- Against the 500 and 1,000 images, COCO F1 is 1 to 1.6 points lower for the slot heads
+  and Moondream 3.1 alike (rank 128: 0.707 to 0.696; Moondream 3.1: 0.700 to 0.684), and
+  VOC F1 is within half a point. The order of the models is unchanged.
+- Paired over the same images, the rank-128 head is ahead of Moondream 3.1 on COCO by
+  1.2 points (95% interval 0.0 to 2.4) and behind on VOC by 0.5 (-1.0 to 0.0).
+- YOLO11x is 2.5 points ahead of the rank-128 head on COCO (0.721 against 0.696), where
+  on the 500 images it was 0.8 ahead.
+
 ### The 4-bit head against YOLO in a browser
 
 `web/tests/yolo.test.js` runs YOLO's ONNX files (640 x 640 input, exported by
