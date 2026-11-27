@@ -1054,9 +1054,41 @@ CURVE_SERIES = [
     ("Rank 64 on 4-bit weights", "slots-teacher-coco-rank64-w4", VIOLET, 1.8),
 ]
 MOONDREAM_COLOURS = {"Moondream 2": BLUE, "Moondream 3.1": YELLOW}
+# Reference detectors with a confidence per box: label, {split: (run, dataset)}, the
+# threshold tuned on COCO, colour. Their runs cover the whole test sets; the figure uses
+# the images of the slot heads' sample.
+BASELINE_CURVES = [
+    (
+        "YOLO11x",
+        {
+            "coco": ("full-yolo11x", "coco_val2017_full"),
+            "voc": ("full-yolo11x", "voc2007_test_full"),
+        },
+        0.26,
+        GREY,
+    ),
+    (
+        "RF-DETR-M",
+        {
+            "coco": ("full-rf-detr", "coco_val2017_full"),
+            "voc": ("full-rf-detr", "voc2007_test_full"),
+        },
+        0.37,
+        MAGENTA,
+    ),
+    (
+        "OWLv2-L",
+        {
+            "coco": ("full-coco-owl", "coco_val2017_full"),
+            "voc": ("full-voc-owl", "voc2007_test_full"),
+        },
+        0.15,
+        GREEN,
+    ),
+]
 # The teacher's own labels of the test images, scored like a model's
 # (`crescent_moon.teacher score`): folder per split and the model id its records carry.
-TEACHER = ("Gemini 4 Carbon, the teacher", "google/gemini-4-carbon")
+TEACHER = ("Gemini 4 Carbon (teacher)", "google/gemini-4-carbon")
 TEACHER_RUNS = {"coco": "teacher-coco-test", "voc": "teacher-voc-test"}
 
 
@@ -1076,7 +1108,7 @@ def selection_pr_figure(artifacts, out, images):
     sizes = image_sizes(configs, images)
     aliases = {"voc2007_test": {"car": ["car", "truck"]}}
     setting = {"tile_max_cells": None, "merge": "fuse", "duplicate_iou": 0.5, "box_power": 0.25}
-    figure, axes = plt.subplots(1, 2, figsize=(13, 5.6), facecolor=SURFACE)
+    figure, axes = plt.subplots(1, 2, figsize=(13, 7.0), facecolor=SURFACE)
     panels = (
         ("coco", "coco_val2017", "COCO val2017, 500 images", (0.4, 0.8), 0.4),
         ("voc", "voc2007_test", "Pascal VOC 2007 test, 1,000 images", (0.6, 1.0), 0.6),
@@ -1106,6 +1138,33 @@ def selection_pr_figure(artifacts, out, images):
                 [point["recall"]],
                 [point["precision"]],
                 s=45 * width / 1.8,
+                color=colour,
+                edgecolor=SURFACE,
+                linewidth=1.5,
+                zorder=3,
+            )
+        sample = {r["image_id"] for r in records}
+        for label, runs, threshold, colour in BASELINE_CURVES:
+            run, full = runs[split]
+            records = [
+                r
+                for r in read_records(artifacts / run / "predictions.jsonl")
+                if r["dataset"] == full and r["image_id"] in sample
+            ]
+            precision, recall, _ = ranked_curve(records)
+            point = summarize(above(records, threshold))[full]["detection"]["iou_0.5"]
+            axis.plot(
+                recall,
+                precision,
+                color=colour,
+                linewidth=1.4,
+                linestyle=(0, (4, 2)),
+                label=f"{label}: F1 {point['f1']:.3f}",
+            )
+            axis.scatter(
+                [point["recall"]],
+                [point["precision"]],
+                s=40,
                 color=colour,
                 edgecolor=SURFACE,
                 linewidth=1.5,
@@ -1145,12 +1204,19 @@ def selection_pr_figure(artifacts, out, images):
             edgecolor=SURFACE,
             linewidth=1.5,
             zorder=4,
-            label=f"{name} (one point): F1 {point['f1']:.3f}",
+            label=f"{name}: F1 {point['f1']:.3f}",
         )
         axis.set_xlabel("Recall", fontsize=9, color=MUTED)
         axis.set_xlim(*across)
         axis.set_ylim(low, 1.0)
-        axis.legend(frameon=False, fontsize=8.5, labelcolor=INK, loc="lower left")
+        axis.legend(
+            frameon=False,
+            fontsize=8.5,
+            labelcolor=INK,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.11),
+            ncol=2,
+        )
     axes[0].set_ylabel("Precision", fontsize=9, color=MUTED)
     figure.tight_layout()
     figure.savefig(out / "selection-precision-recall.png", dpi=170, facecolor=SURFACE)
