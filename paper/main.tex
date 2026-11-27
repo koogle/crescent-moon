@@ -69,19 +69,18 @@
   {\sffamily\bfseries\small Abstract}\\[3pt]
   \small
   Small vision-language models (VLMs) learn broad visual understanding during pretraining,
-  but using them for object detection requires generating coordinates one token at a time
-  and one prompt per category. Inspired by diffusion-based drafting for language models,
-  we implement VLM object detection as a one-pass task: we append 48 learnable slots to a
-  frozen Moondream~2 (1.9B), fill them in a single forward pass, and decode them through
-  the model's existing coordinate, size, and vocabulary heads. Training only slot-level
-  low-rank adapters and a linear objectness head with a Hungarian set loss on 46k COCO and
-  17.7k teacher-labelled images, the resulting head matches Moondream~3.1 (9.3B) F1 in
-  less than half the time on COCO val2017 (0.090\,s vs.\ 0.204\,s) and ties it on Pascal
-  VOC 2007 (0.857 vs.\ 0.862), which no model was tuned on. Unlike dedicated detectors
+  but remain too slow for object detection. Inspired by diffusion-based drafting for
+  language models, we implement VLM object detection as a one-pass task: we append 48
+  learnable slots to a frozen Moondream~2 (1.9B), fill them in a single forward pass, and
+  decode them through the model's existing coordinate, size, and vocabulary heads.
+  Training only slot-level low-rank adapters and a linear objectness head with a Hungarian
+  set loss on 46k COCO and 17.7k teacher-labelled images, the resulting head matches
+  Moondream~3.1 (9.3B) F1 in less than half the time on COCO val2017 (0.090\,s vs.\
+  0.204\,s) and ties it on unseen Pascal VOC 2007 (0.857 vs.\ 0.862). Unlike dedicated detectors
   such as YOLO11x, it stays robust under domain shift on COCO-O, and its flat sub-100\,ms
   latency makes continuous detection on streamed video practical regardless of category
-  count. Small-object recall lags Moondream~3.1 (sub-cell recall 0.19 vs.\ 0.32), a gap
-  closed by an optional $2\times2$ tiled pass at higher latency.%
+  count. Small-object recall lags Moondream, a gap we can close with tiling, giving a
+  trade-off between speed and recall.%
 };
 \end{tikzpicture}
 \vspace{0.6em}
@@ -240,19 +239,18 @@
 
 \section{Introduction}
 Object detection has been one of the core applications of machine learning for over a
-decade~\citep{girshick2014rcnn,redmon2016yolo}. Vision-language models can also localise
-objects by emitting coordinate tokens~\citep{chen2022pix2seq}, but decoding is sequential
-and conditioned on a prompt. Moondream~2's \texttt{detect}~\citep{moondream} takes three
-decoder steps per box and one call per phrase, so latency grows with both the number of
-categories and the number of objects. That makes VLMs impractical for fast detection,
-especially when no prompt is given.
+decade. Vision-language models can also localise objects by emitting coordinate
+tokens~\citep{chen2022pix2seq}, but decoding is sequential and conditioned on a prompt.
+Moondream~2's \texttt{detect}~\citep{moondream} takes three decoder steps per box and one
+call per phrase, so latency grows with both the number of categories and the number of
+objects. That makes VLMs impractical for fast detection, especially when no prompt is
+given.
 
 Set prediction (DETR~\citep{carion2020detr}) takes a different approach: a fixed set of
-queries each returns a box or ``no object'' in one pass. It is the basis of today's
-strongest detectors, including DINO~\citep{zhang2023dino} and real-time variants like
-RT-DETR~\citep{zhao2024rtdetr}. Inspired by diffusion-based drafting in language
-models~\citep{austin2021d3pm,sahoo2024mdlm,nie2025llada}, we ask whether a similar
-parallel approach lets a small VLM perform fast object detection.
+queries each returns a box or ``no object'' in one pass, and underpins modern real-time
+detectors like RF-DETR~\citep{robinson2026rfdetr}. Inspired by masked-diffusion drafting
+in language models~\citep{sahoo2024mdlm,nie2025llada}, we ask whether a similar parallel
+approach lets a small VLM perform fast object detection.
 
 We append 48 slots to a frozen Moondream~2 and train 50--100M adapter parameters
 (Section~\ref{sec:method}). A single pass is enough, as extra diffusion steps
@@ -338,21 +336,21 @@ fills all slots at once. Instead of adding new box or class heads, we read the s
 through Moondream~2's frozen coordinate, size, and vocabulary heads. The only new output
 is a linear objectness layer per slot that predicts whether the slot holds an object or
 is empty. This is the first step of masked-diffusion
-decoding~\citep{chang2022maskgit,austin2021d3pm,sahoo2024mdlm,nie2025llada}, where all
+decoding~\citep{sahoo2024mdlm,nie2025llada}, where all
 blank positions are predicted together, except we stop after one step.
 
 Moondream~2 itself stays frozen. We train only the slot embeddings, the objectness layer,
 and rank-64 or rank-128 LoRA adapters~\citep{hu2022lora} active at the slot positions
 (50M or 100M parameters). Because the image tokens are untouched, captioning and VQA work
 exactly as before. Following DETR~\citep{carion2020detr}, Hungarian
-matching~\citep{kuhn1955hungarian} pairs each labelled box with the closest slot during
+matching pairs each labelled box with the closest slot during
 training. Paired slots are supervised with coordinate and label cross-entropy plus L1 and
 GIoU box losses~\citep{rezatofighi2019giou}, while unmatched slots are trained as empty (20k
 steps, batch size 16, 2--4 hours on one H100). We train on 46k COCO train2017
 images~\citep{lin2014coco} plus 17.7k Open Images~\citep{kuznetsova2020openimages} and
-Objects365~\citep{shao2019objects365} images distilled~\citep{hinton2015distilling} from
-Gemini~4 Carbon~\citep{gemini2023}. We picked that teacher by comparing 12 VLMs through
-OpenRouter~\citep{openrouter} on 200 COCO images (0.756 F1, \$120 for 21k labelled images
+Objects365~\citep{shao2019objects365} images labelled by
+Gemini~4 Carbon. We picked that teacher by comparing 12 VLMs through
+OpenRouter on 200 COCO images (0.756 F1, \$120 for 21k labelled images
 before filtering).
 
 At inference, each slot is scored by objectness times label confidence times
@@ -438,9 +436,8 @@ from 3.9\,GB to 1.1\,GB for browser or mobile use. Single-crop rank-64 COCO F1 d
 
 \section{Limitations}
 The biggest constraint is the vocabulary: the slot head is fixed to COCO's 80 categories,
-whereas Moondream can be prompted with arbitrary free text. Extending the approach to
-larger vocabularies like LVIS~\citep{gupta2019lvis} or to referring
-expressions~\citep{yu2016refcoco} remains untested. Without tiling, the head also misses
+whereas Moondream can be prompted with arbitrary free text. Extending the approach to larger vocabularies like LVIS or to referring expressions
+remains untested. Without tiling, the head also misses
 more small objects than Moondream~3.1, because the vision encoder's $27\times27$ grid
 limits spatial resolution. Finally, on the evaluation side, both Moondream~2 and
 Moondream~3.1 have likely seen COCO during pretraining, making Pascal VOC and COCO-O the
@@ -461,7 +458,7 @@ previous frame's boxes as partially revealed slots would let each slot hold onto
 object across frames, while longer open-vocabulary labels are where multi-step diffusion
 refinement may start to matter.
 
-\bibliographystyle{plainnat}\bibliography{references}
+\bibliographystyle{abbrvnat}\bibliography{references}
 
 \clearpage
 \onecolumn
@@ -475,9 +472,7 @@ refinement may start to matter.
 
 \section{Ablations}
 Table~\ref{tab:ablate} shows each change by itself (\ok{} helped, \eq{} within the
-$\sim$1.5-point paired-bootstrap noise, \no{} hurt). Mean-teacher
-self-training~\citep{tarvainen2017meanteacher,liu2021unbiasedteacher,xie2020noisystudent}
-hurt slightly. Separately from the slot head, custom fused CUDA kernels for Moondream~2's
+$\sim$1.5-point paired-bootstrap noise, \no{} hurt). Mean-teacher self-training hurt slightly. Separately from the slot head, custom fused CUDA kernels for Moondream~2's
 sequential decoder cut its per-box cost by $1.85\times$ (close to, though not
 bit-identical with, eager PyTorch).
 
