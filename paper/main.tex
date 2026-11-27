@@ -364,33 +364,29 @@ are chosen on 500 held-out COCO val2017 images.
 
 \begin{table*}[t]
 \centering\small\setlength{\tabcolsep}{8pt}
-\caption{F1$_{.5}$ across four test sets and COCO latency (one L40S). Moondream and
-OWLv2 are prompted with present ground-truth classes, while YOLO, RF-DETR and Slots run
-unprompted.}
+\caption{F1$_{.5}$ across four test sets and COCO latency (one L40S). Moondream is
+prompted with present ground-truth classes, while YOLO and Slots (rank 128) run
+unprompted. Table~\ref{tab:baselines} adds more baselines.}
 \label{tab:main}
 \begin{tabular}{@{}lccccr@{}}
 \toprule
 Model & COCO & VOC & COCO-O & Generated & s/img \\
 \midrule
 Moondream 2 \texttt{detect} & .594 & .850 & .773 & .641 & .217 \\
-Moondream 3.1 & .684 & \textbf{.862} & \textbf{.781} & .795 & .204 \\
-OWLv2-L & .489 & .643 & .616 & .689 & .461 \\
-YOLO11n & .606 & .771 & .410 & .582 & \textbf{.012} \\
-YOLO11x & .721 & .843 & .520 & .734 & .018 \\
-RF-DETR-M & \textbf{.731} & .855 & .543 & .766 & .013 \\
+Moondream 3.1 & .684 & \textbf{.862} & \textbf{.781} & \textbf{.795} & .204 \\
+YOLO11x & \textbf{.721} & .843 & .520 & .734 & \textbf{.018} \\
 \midrule
-\rowcolor{rowtint} Slots, rank 64 & .693 & .843 & .765 & .779 & .094 \\
-\rowcolor{rowtint} Slots, rank 64, with tiles & .706 & .844 & .773 & \textbf{.796} & .224 \\
-\rowcolor{rowtint} Slots, rank 128 & .696 & .857 & .772 & .786 & .090 \\
-\rowcolor{rowtint} Slots, rank 128, with tiles & .711 & .849 & .775 & .791 & .223 \\
+\rowcolor{rowtint} Slots & .696 & .857 & .772 & .786 & .090 \\
+\rowcolor{rowtint} Slots, with tiles & .711 & .849 & .775 & .791 & .223 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
 \section{Experiments}
-We compare against Moondream~2, Moondream~3.1 (9.3B), the open-vocabulary
-OWLv2~\citep{minderer2023owlv2}, and the COCO-trained detectors YOLO11n/x~\citep{yolo11}
-(2.6M/57M) and RF-DETR~\citep{robinson2026rfdetr} on four test sets: the 4{,}452 COCO
+We compare against Moondream~2, Moondream~3.1 (9.3B) and the COCO-trained detector
+YOLO11x~\citep{yolo11} (57M) on four test sets (Table~\ref{tab:main});
+Table~\ref{tab:baselines} in the appendix adds YOLO11n, RF-DETR~\citep{robinson2026rfdetr},
+the open-vocabulary OWLv2~\citep{minderer2023owlv2} and rank-64 slots. The test sets are the 4{,}452 COCO
 val2017 images outside our tuning split, the full Pascal VOC 2007 test set (4{,}952
 images, zero tuning), COCO-O~\citep{mao2023cocoo} (6{,}782 OOD sketches, cartoons,
 paintings, tattoos, and bad-weather photos), and \emph{Generated} (3{,}950 unseen
@@ -406,7 +402,7 @@ point. At the chosen threshold, slots have higher precision and lower recall
 (Fig.~\ref{fig:speed}, Table~\ref{tab:coco}): most misses are smaller than one feature-grid cell (sub-cell
 recall 0.19 vs.\ 0.32). Adding $2\times2$ tiles closes that gap on
 COCO (0.32), though not on VOC where objects are larger. Since rank 128 matches rank 64 in
-speed and adds 1.4 points on VOC, we use rank 128 below.
+speed and adds 1.4 points on VOC (Table~\ref{tab:baselines}), Slots means rank 128 throughout.
 
 Filling the slots takes only 0.016\,s, with the frozen vision encoder taking the rest.
 Because one pass covers every class, runtime stays flat at 0.082\,s even when querying
@@ -420,7 +416,7 @@ ranked list, the gap is wider (Table~\ref{tab:coco}). If images look like COCO a
 COCO categories matter, a dedicated detector is the better choice. That flips under
 distribution shift. On COCO-O, YOLO11x and RF-DETR each lose a quarter of their F1 because
 they find roughly half as many objects, while slots stay within a point of Moondream~3.1
-(Table~\ref{tab:main}). OWLv2 holds up better there than the closed-set detectors but
+(Tables~\ref{tab:main} and~\ref{tab:baselines}). OWLv2 holds up better there than the closed-set detectors but
 trails slots on every test set at five times the latency. On Generated, whose labels come
 from our teacher, the ranking is the same under two other labellers
 (Table~\ref{tab:labellers}). The head keeps the general visual understanding of the VLM it is
@@ -520,6 +516,31 @@ bit-identical with, eager PyTorch).
 \end{table}
 
 \section{Detailed Metrics: COCO and Video}
+
+\begin{table}[h]
+\centering\small\setlength{\tabcolsep}{8pt}
+\caption{All models: F1$_{.5}$ across four test sets and COCO latency (one L40S).
+Moondream and OWLv2 are prompted with present ground-truth classes; YOLO, RF-DETR and
+Slots run unprompted. Rank is the size of the slot adapters.}
+\label{tab:baselines}
+\begin{tabular}{@{}lccccr@{}}
+\toprule
+Model & COCO & VOC & COCO-O & Generated & s/img \\
+\midrule
+Moondream 2 \texttt{detect} & .594 & .850 & .773 & .641 & .217 \\
+Moondream 3.1 & .684 & \textbf{.862} & \textbf{.781} & .795 & .204 \\
+OWLv2-L & .489 & .643 & .616 & .689 & .461 \\
+YOLO11n & .606 & .771 & .410 & .582 & \textbf{.012} \\
+YOLO11x & .721 & .843 & .520 & .734 & .018 \\
+RF-DETR-M & \textbf{.731} & .855 & .543 & .766 & .013 \\
+\midrule
+\rowcolor{rowtint} Slots, rank 64 & .693 & .843 & .765 & .779 & .094 \\
+\rowcolor{rowtint} Slots, rank 64, with tiles & .706 & .844 & .773 & \textbf{.796} & .224 \\
+\rowcolor{rowtint} Slots, rank 128 & .696 & .857 & .772 & .786 & .090 \\
+\rowcolor{rowtint} Slots, rank 128, with tiles & .711 & .849 & .775 & .791 & .223 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{table}[h]
 \centering\small\setlength{\tabcolsep}{6pt}
