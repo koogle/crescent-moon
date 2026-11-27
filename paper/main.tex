@@ -80,7 +80,7 @@
   VOC 2007 (0.857 vs.\ 0.862), which no model was tuned on. Unlike dedicated detectors
   such as YOLO11x, it stays robust under domain shift on COCO-O, and its flat sub-100\,ms
   latency makes continuous detection on streamed video practical regardless of category
-  count. Small-object recall lags Moondream~3.1 (sub-cell recall 0.20 vs.\ 0.36), a gap
+  count. Small-object recall lags Moondream~3.1 (sub-cell recall 0.19 vs.\ 0.32), a gap
   closed by an optional $2\times2$ tiled pass at higher latency.%
 };
 \end{tikzpicture}
@@ -404,8 +404,8 @@ Because each slot outputs a confidence score, we can trade precision against rec
 the score threshold (Fig.~\ref{fig:pr}), whereas Moondream outputs a single operating
 point. At the chosen threshold, slots have higher precision and lower recall
 (Fig.~\ref{fig:speed}, Table~\ref{tab:coco}): most misses are smaller than one feature-grid cell (sub-cell
-recall 0.20 vs.\ 0.36 on a 500-image sample). Adding $2\times2$ tiles closes that gap on
-COCO (0.37), though not on VOC where objects are larger. Since rank 128 matches rank 64 in
+recall 0.19 vs.\ 0.32). Adding $2\times2$ tiles closes that gap on
+COCO (0.32), though not on VOC where objects are larger. Since rank 128 matches rank 64 in
 speed and adds 1.4 points on VOC, we use rank 128 below.
 
 Filling the slots takes only 0.016\,s, with the frozen vision encoder taking the rest.
@@ -524,22 +524,22 @@ bit-identical with, eager PyTorch).
 \begin{table}[h]
 \centering\small\setlength{\tabcolsep}{6pt}
 \caption{COCO val2017 (4{,}452 images): precision, recall, F1$_{.5}$ with a 95\%
-bootstrap interval over images, F1$_{.75}$, and COCO AP with every category asked of
-every image. Moondream gives no confidences, so it has no AP.}
+bootstrap interval over images, F1$_{.75}$, recall of objects under one feature-grid
+cell, and COCO AP with every category asked of every image. Moondream gives no confidences, so it has no AP.}
 \label{tab:coco}
-\begin{tabular}{@{}lccccccc@{}}
+\begin{tabular}{@{}lcccccccc@{}}
 \toprule
-Model & Precision & Recall & F1$_{.5}$ & 95\% interval & F1$_{.75}$ & AP$_{.5}$ & AP \\
+Model & Precision & Recall & F1$_{.5}$ & 95\% interval & F1$_{.75}$ & R $<$1 cell & AP$_{.5}$ & AP \\
 \midrule
-Moondream 2 \texttt{detect} & .518 & .695 & .594 & .571--.616 & .448 & -- & -- \\
-Moondream 3.1 & .663 & \textbf{.707} & .684 & .669--.699 & .541 & -- & -- \\
-YOLO11n & .706 & .530 & .606 & .598--.613 & .495 & .529 & .378 \\
-YOLO11x & .797 & .658 & .721 & .714--.728 & .632 & .692 & .527 \\
-RF-DETR-M & .792 & .679 & \textbf{.731} & .724--.738 & .617 & \textbf{.724} & \textbf{.538} \\
-\rowcolor{rowtint} Slots, rank 64 & .772 & .630 & .693 & .685--.701 & .542 & .631 & .448 \\
-\rowcolor{rowtint} Slots, rank 64, with tiles & .763 & .657 & .706 & .698--.713 & .585 & -- & -- \\
-\rowcolor{rowtint} Slots, rank 128 & \textbf{.801} & .616 & .696 & .688--.704 & .550 & .629 & .445 \\
-\rowcolor{rowtint} Slots, rank 128, with tiles & .739 & .686 & .711 & .703--.719 & .575 & .675 & .480 \\
+Moondream 2 \texttt{detect} & .518 & .695 & .594 & .571--.616 & .448 & .29 & -- & -- \\
+Moondream 3.1 & .663 & \textbf{.707} & .684 & .669--.699 & .541 & .32 & -- & -- \\
+YOLO11n & .706 & .530 & .606 & .598--.613 & .495 & -- & .529 & .378 \\
+YOLO11x & .797 & .658 & .721 & .714--.728 & .632 & .29 & .692 & .527 \\
+RF-DETR-M & .792 & .679 & \textbf{.731} & .724--.738 & .617 & \textbf{.33} & \textbf{.724} & \textbf{.538} \\
+\rowcolor{rowtint} Slots, rank 64 & .772 & .630 & .693 & .685--.701 & .542 & .21 & .631 & .448 \\
+\rowcolor{rowtint} Slots, rank 64, with tiles & .763 & .657 & .706 & .698--.713 & .585 & .29 & -- & -- \\
+\rowcolor{rowtint} Slots, rank 128 & \textbf{.801} & .616 & .696 & .688--.704 & .550 & .19 & .629 & .445 \\
+\rowcolor{rowtint} Slots, rank 128, with tiles & .739 & .686 & .711 & .703--.719 & .575 & .32 & .675 & .480 \\
 \bottomrule
 \end{tabular}
 \end{table}

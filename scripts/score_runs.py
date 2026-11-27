@@ -9,17 +9,22 @@
 under the precision-recall curve, at IoU 0.5 and averaged over IoU 0.5 to 0.95, counting
 boxes for categories absent from an image as misses; this is COCO's AP when every
 category was asked of every image. `aliases` maps a phrase to the labels that answer it
-for records that keep every candidate label.
+for records that keep every candidate label. With "config" (the evaluation config, for
+image sizes) the entry also gets recall by object size in cells of the vision encoder's grid.
 """
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 
 from crescent_moon.metrics import interval, ranked_ap, summarize
 from crescent_moon.run import above, read_records
+
+sys.path.insert(0, str(Path(__file__).parent))
+from study_selection import image_sizes, recall_by_cells
 
 
 def score(entry):
@@ -48,6 +53,10 @@ def score(entry):
         "interval_95": interval(present),
         "image_seconds": summary["latency"]["image_seconds"]["mean"],
     }
+    if entry.get("config"):
+        sizes = image_sizes([entry["config"]], Path("artifacts/images"))
+        sized = [r | {"size": sizes[r["dataset"], r["image_id"]]} for r in present]
+        out["recall_by_cells"] = recall_by_cells(sized)
     return out
 
 

@@ -933,6 +933,11 @@ on the whole VOC 2007 test set (4,952), each model at the threshold tuned on the
   1.2 points (95% interval 0.0 to 2.4) and behind on VOC by 0.5 (-1.0 to 0.0).
 - YOLO11x is 2.5 points ahead of the rank-128 head on COCO (0.721 against 0.696), where
   on the 500 images it was 0.8 ahead.
+- Recall of objects under one cell of the 27 x 27 grid, on the 4,452 images
+  (`scripts/score_runs.py` with "config"): rank 128 0.19 from the full image and 0.32 with
+  tiles, rank 64 0.21 and 0.29, Moondream 3.1 0.32, Moondream 2 0.29, YOLO11x 0.29,
+  RF-DETR-M 0.33. For objects of four cells and over the heads are at 0.84, Moondream 3.1
+  at 0.87.
 
 ### Two more reference detectors, and COCO AP
 
