@@ -238,7 +238,8 @@ def ranked_curve(records, threshold=0.5, absent=False):
             overlaps = np.where(taken, -1.0, iou[rank]) if len(r["boxes"]) else np.array([-1.0])
             best = int(overlaps.argmax())
             hit = bool(overlaps[best] >= threshold)
-            taken[best] |= hit
+            if hit:
+                taken[best] = True
             entry[0].append(r["scores"][index])
             entry[1].append(hit)
         entry[2] += len(r["boxes"])
