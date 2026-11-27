@@ -1,0 +1,14 @@
+{
+  "manifest": "artifacts/generated-wide/manifest.jsonl",
+  "workers": 6,
+  "models": {
+    "openai/gpt-6.2-sol": {
+      "reasoning": {
+        "effort": "low"
+      },
+      "response_format": {
+        "type": "json_object"
+      }
+    }
+  }
+}
